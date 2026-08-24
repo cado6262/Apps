@@ -2,33 +2,23 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var state: AppState
-    @State private var selectedTab = "home"
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView {
             HomeView()
-                .tabItem { Label("Heute",      systemImage: "house.fill") }
-                .tag("home")
-
-            PantryView()
-                .tabItem { Label("Vorrat",     systemImage: "archivebox.fill") }
-                .tag("pantry")
-
-            ShoppingView()
-                .tabItem { Label("Einkauf",    systemImage: "cart.fill") }
-                .tag("shopping")
-
-            PlannerView()
-                .tabItem { Label("Planer",     systemImage: "calendar") }
-                .tag("planner")
+                .tabItem { Label("Heute",   systemImage: "house.fill") }
 
             NutritionView()
-                .tabItem { Label("Makros",     systemImage: "flame.fill") }
-                .tag("nutrition")
+                .tabItem { Label("Makros",  systemImage: "flame.fill") }
+
+            KucheView()
+                .tabItem { Label("Küche",   systemImage: "refrigerator.fill") }
+
+            PlannerView()
+                .tabItem { Label("Planer",  systemImage: "calendar") }
 
             SocialView()
-                .tabItem { Label("Freunde",    systemImage: "person.2.fill") }
-                .tag("social")
+                .tabItem { Label("Freunde", systemImage: "person.2.fill") }
         }
         .accentColor(Theme.amber)
     }

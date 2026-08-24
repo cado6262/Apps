@@ -3,54 +3,64 @@ import SwiftUI
 // Eingebettet in KucheView
 struct ShoppingContent: View {
     @EnvironmentObject var state: AppState
-    @State private var newItem       = ""
+    @State private var newItem          = ""
     @State private var filterStoreId: UUID? = nil
     @State private var expandedRecipes: Set<Int> = []
-    @State private var showBasics    = false
-    @State private var showStoreSheet = false
+    @State private var showBasics       = false
+    @State private var showStorePicker  = false   // Dialog: Markt für neuen Artikel
+    @State private var showAddStore     = false   // Alert: neuen Supermarkt anlegen
+    @State private var newStoreName     = ""
 
     var doneCount: Int { state.shopping.filter(\.isDone).count }
     var progress: Double {
         state.shopping.isEmpty ? 0 : Double(doneCount) / Double(state.shopping.count)
     }
 
+    // Nur Artikel für den aktiven Markt — bei "Alle" (nil) alle anzeigen
     var filteredStandalone: [ShoppingItem] {
         let base = state.standaloneItems
-        guard let sid = filterStoreId else { return base }
-        return base.filter { $0.storeId == nil || $0.storeId == sid }
+        let filtered = filterStoreId == nil ? base : base.filter { $0.storeId == filterStoreId }
+        // nach Gängen des aktiven Markts sortieren
+        guard let store = state.selectedSupermarket else { return filtered }
+        return filtered.sorted {
+            let ai = store.aisles.firstIndex(of: $0.aisle) ?? 999
+            let bi = store.aisles.firstIndex(of: $1.aisle) ?? 999
+            return ai < bi
+        }
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
 
-                // Supermarkt-Selector
-                Button { showStoreSheet = true } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "storefront").font(.system(size: 14)).foregroundColor(Theme.amber)
-                        Text(state.selectedSupermarket?.name ?? "Supermarkt wählen")
-                            .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.dark)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 11)).foregroundColor(Theme.muted)
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Theme.white)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
-
-                // ── Supermarkt Filter-Pills ──
+                // ── Supermarkt-Tabs ──
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        storeFilterPill(id: nil, name: "Alle")
+                        storeTab(id: nil, name: "Alle")
                         ForEach(state.supermarkets) { store in
-                            storeFilterPill(id: store.id, name: store.name)
+                            storeTab(id: store.id, name: store.name)
+                                .contextMenu {
+                                    Button(role: .destructive) { deleteStore(store) } label: {
+                                        Label("Löschen", systemImage: "trash")
+                                    }
+                                }
                         }
+                        // Neuen Supermarkt hinzufügen
+                        Button { showAddStore = true } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Theme.amber)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(Theme.amberBg)
+                                .overlay(RoundedRectangle(cornerRadius: 20)
+                                    .stroke(Theme.amber.opacity(0.4), lineWidth: 1))
+                                .cornerRadius(20)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 16).padding(.vertical, 2)
+                    .padding(.horizontal, 16).padding(.vertical, 4)
                 }
-                .padding(.bottom, 10)
+                .padding(.top, 12).padding(.bottom, 12)
 
                 // Fortschritt
                 VStack(spacing: 8) {
@@ -75,32 +85,21 @@ struct ShoppingContent: View {
                 .cornerRadius(14)
                 .padding(.horizontal, 16).padding(.bottom, 12)
 
-                // Neue Zutat
+                // Neue Zutat — "+" öffnet Markt-Auswahl
                 HStack(spacing: 8) {
                     TextField("Artikel hinzufügen...", text: $newItem)
                         .font(.system(size: 14)).foregroundColor(Theme.dark)
-                        .onSubmit { addItem() }
+                        .onSubmit { triggerAdd() }
                         .padding(10)
                         .background(Theme.white)
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
                         .cornerRadius(10)
-                    Button(action: addItem) {
+                    Button(action: triggerAdd) {
                         Text("+").font(.system(size: 20, weight: .bold)).foregroundColor(.white)
                             .frame(width: 44, height: 44).background(Theme.amber).cornerRadius(10)
                     }
                 }
-                .padding(.horizontal, 16).padding(.bottom, 4)
-
-                // Hinweis: aktiver Filter
-                if let sid = filterStoreId,
-                   let storeName = state.supermarkets.first(where: { $0.id == sid })?.name {
-                    Text("Neue Artikel werden \(storeName) zugewiesen")
-                        .font(.system(size: 10)).foregroundColor(Theme.muted.opacity(0.7))
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal, 16).padding(.bottom, 12)
-                } else {
-                    Spacer().frame(height: 12)
-                }
+                .padding(.horizontal, 16).padding(.bottom, 16)
 
                 // ── Rezept-Sektionen (aufklappbar) ──
                 if !state.recipeGroups.isEmpty {
@@ -121,10 +120,18 @@ struct ShoppingContent: View {
                     Spacer().frame(height: 4)
                 }
 
-                // ── Einzelartikel (nach Gang sortiert, gefiltert nach Markt) ──
+                // ── Einzelartikel (gefiltert + nach Gang sortiert) ──
                 let standalone = filteredStandalone
                 if !standalone.isEmpty {
-                    sectionHeader("ARTIKEL")
+                    HStack {
+                        sectionHeader("ARTIKEL")
+                        Spacer()
+                        if filterStoreId != nil {
+                            Text("nur \(state.supermarkets.first { $0.id == filterStoreId }?.name ?? "")")
+                                .font(.system(size: 10)).foregroundColor(Theme.amber)
+                                .padding(.trailing, 16)
+                        }
+                    }
                     let aisles = standalone.map(\.aisle).uniqueOrdered()
                     ForEach(aisles, id: \.self) { aisle in
                         VStack(alignment: .leading, spacing: 6) {
@@ -143,6 +150,18 @@ struct ShoppingContent: View {
                         }
                         .padding(.bottom, 12)
                     }
+                } else if filterStoreId != nil {
+                    // Leer-Zustand wenn Filter aktiv
+                    let name = state.supermarkets.first { $0.id == filterStoreId }?.name ?? "diesem Markt"
+                    VStack(spacing: 8) {
+                        Image(systemName: "cart").font(.system(size: 28)).foregroundColor(Theme.muted.opacity(0.4))
+                        Text("Keine Artikel für \(name)")
+                            .font(.system(size: 13)).foregroundColor(Theme.muted)
+                        Text("Tippe einen Artikel ein und wähle \(name) als Markt")
+                            .font(.system(size: 11)).foregroundColor(Theme.muted.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.vertical, 32).padding(.horizontal, 32)
                 }
 
                 // ── Basics prüfen ──
@@ -150,21 +169,39 @@ struct ShoppingContent: View {
                     .padding(.horizontal, 16).padding(.bottom, 20)
             }
         }
-        .sheet(isPresented: $showStoreSheet) { StorePickerSheet() }
+        // Dialog: Für welchen Supermarkt?
+        .confirmationDialog("Für welchen Supermarkt?", isPresented: $showStorePicker, titleVisibility: .visible) {
+            ForEach(state.supermarkets) { store in
+                Button(store.name) { addItemToStore(storeId: store.id) }
+            }
+            Button("Kein bestimmter Markt") { addItemToStore(storeId: nil) }
+            Button("Abbrechen", role: .cancel) { }
+        }
+        // Alert: Neuen Supermarkt anlegen
+        .alert("Neuer Supermarkt", isPresented: $showAddStore) {
+            TextField("Name (z.B. Aldi)", text: $newStoreName)
+            Button("Hinzufügen") { addStore() }
+            Button("Abbrechen", role: .cancel) { newStoreName = "" }
+        }
     }
 
+    // MARK: - Store Tab
     @ViewBuilder
-    private func storeFilterPill(id: UUID?, name: String) -> some View {
+    private func storeTab(id: UUID?, name: String) -> some View {
         let isActive = filterStoreId == id
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) { filterStoreId = id }
+            withAnimation(.easeInOut(duration: 0.15)) {
+                filterStoreId = id
+                if let id { state.selectedSupermarketId = id }
+            }
         } label: {
             Text(name)
-                .font(.system(size: 12, weight: isActive ? .bold : .regular))
+                .font(.system(size: 13, weight: isActive ? .bold : .regular))
                 .foregroundColor(isActive ? .white : Theme.dark)
-                .padding(.horizontal, 14).padding(.vertical, 7)
+                .padding(.horizontal, 16).padding(.vertical, 8)
                 .background(isActive ? Theme.amber : Theme.white)
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(isActive ? Theme.amber : Theme.border, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 20)
+                    .stroke(isActive ? Theme.amber : Theme.border, lineWidth: 1))
                 .cornerRadius(20)
         }
         .buttonStyle(.plain)
@@ -176,16 +213,44 @@ struct ShoppingContent: View {
             .padding(.horizontal, 16).padding(.bottom, 8)
     }
 
-    private func addItem() {
+    // MARK: - Actions
+    private func triggerAdd() {
         guard !newItem.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        if state.supermarkets.isEmpty {
+            addItemToStore(storeId: nil)
+        } else {
+            showStorePicker = true
+        }
+    }
+
+    private func addItemToStore(storeId: UUID?) {
         state.shopping.append(ShoppingItem(
             id: Int(Date().timeIntervalSince1970),
             name: newItem.trimmingCharacters(in: .whitespaces),
             amount: "", isDone: false, aisle: "Sonstiges",
-            storeId: filterStoreId
+            storeId: storeId
         ))
         newItem = ""
     }
+
+    private func addStore() {
+        let trimmed = newStoreName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        let store = Supermarket(name: trimmed, aisles: Supermarket.defaultAisles)
+        state.supermarkets.append(store)
+        state.selectedSupermarketId = store.id
+        filterStoreId = store.id
+        newStoreName = ""
+    }
+
+    private func deleteStore(_ store: Supermarket) {
+        state.supermarkets.removeAll { $0.id == store.id }
+        if filterStoreId == store.id { filterStoreId = nil }
+        if state.selectedSupermarketId == store.id {
+            state.selectedSupermarketId = state.supermarkets.first?.id
+        }
+    }
+
     private func toggleItem(_ id: Int) {
         if let i = state.shopping.firstIndex(where: { $0.id == id }) { state.shopping[i].isDone.toggle() }
     }
@@ -205,7 +270,6 @@ private struct RecipeShoppingSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             Button(action: onToggleExpand) {
                 HStack(spacing: 10) {
                     Text(group.emoji).font(.system(size: 22))
@@ -232,7 +296,6 @@ private struct RecipeShoppingSection: View {
             .buttonStyle(.plain)
             .background(allDone ? Theme.greenBg : Theme.amberBg)
 
-            // Zutaten (aufgeklappt)
             if isExpanded {
                 VStack(spacing: 0) {
                     ForEach(group.items) { item in
@@ -270,7 +333,7 @@ private struct RecipeShoppingSection: View {
     }
 }
 
-// MARK: - Einfache Shopping-Zeile (mit optionalem Markt-Badge)
+// MARK: - Einfache Shopping-Zeile
 struct ShoppingRow: View {
     let item: ShoppingItem
     let storeName: String?
@@ -391,64 +454,6 @@ private struct BasicsPruefenSection: View {
         guard !newBasic.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         state.basics.append(BasicItem(name: newBasic.trimmingCharacters(in: .whitespaces)))
         newBasic = ""
-    }
-}
-
-// MARK: - Supermarkt Picker
-struct StorePickerSheet: View {
-    @EnvironmentObject var state: AppState
-    @Environment(\.dismiss) private var dismiss
-    @State private var newStoreName = ""
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Meine Supermärkte") {
-                    ForEach(state.supermarkets) { store in
-                        HStack {
-                            Image(systemName: "storefront").foregroundColor(Theme.amber)
-                            Text(store.name).font(.system(size: 15))
-                            Spacer()
-                            if state.selectedSupermarketId == store.id {
-                                Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.green)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            state.selectedSupermarketId = store.id
-                            dismiss()
-                        }
-                    }
-                    .onDelete { idx in state.supermarkets.remove(atOffsets: idx) }
-                }
-                Section("Neuen Supermarkt hinzufügen") {
-                    HStack {
-                        TextField("Name (z.B. Aldi)", text: $newStoreName)
-                        Button("Hinzufügen") { addStore() }
-                            .foregroundColor(Theme.amber).disabled(newStoreName.isEmpty)
-                    }
-                }
-                Section {
-                    Text("Wähle einen Markt als Standard für die Gangssortierung. Artikel können einzeln einem Markt zugewiesen werden.")
-                        .font(.caption).foregroundColor(Theme.muted)
-                }
-            }
-            .navigationTitle("Supermarkt")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Fertig") { dismiss() } }
-            }
-        }
-    }
-
-    private func addStore() {
-        guard !newStoreName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let store = Supermarket(name: newStoreName.trimmingCharacters(in: .whitespaces),
-                                aisles: Supermarket.defaultAisles)
-        state.supermarkets.append(store)
-        state.selectedSupermarketId = store.id
-        newStoreName = ""
-        dismiss()
     }
 }
 

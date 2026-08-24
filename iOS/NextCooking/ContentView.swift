@@ -22,11 +22,14 @@ struct ContentView: View {
                 .tabItem { Label("Planer",     systemImage: "calendar") }
                 .tag("planner")
 
+            NutritionView()
+                .tabItem { Label("Makros",     systemImage: "flame.fill") }
+                .tag("nutrition")
+
             SocialView()
                 .tabItem { Label("Freunde",    systemImage: "person.2.fill") }
                 .tag("social")
         }
         .accentColor(Theme.amber)
-        .background(Theme.cream)
     }
 }

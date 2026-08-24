@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+    <!-- HealthKit: Lesen von Ernaehrungsdaten (MacroFactor, Yazio, MyFitnessPal) -->
+    <key>NSHealthShareUsageDescription</key>
+    <string>Next Cooking importiert deine heutigen Makros (Kalorien, Eiweiss, Fett, Kohlenhydrate) aus Apple Health, um passende Rezepte vorzuschlagen.</string>
+
+    <!-- Kamera (optional, fuer spaetere Barcode-Scan Funktion) -->
+    <key>NSCameraUsageDescription</key>
+    <string>Next Cooking kann die Kamera nutzen, um Barcodes von Lebensmitteln zu scannen.</string>
+
+    <!-- App Transport Security -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+
+    <!-- Unterstuetzte Interface-Orientierungen (iPhone) -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    </array>
+
+    <!-- Unterstuetzte Interface-Orientierungen (iPad) -->
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
+</dict>
+</plist>

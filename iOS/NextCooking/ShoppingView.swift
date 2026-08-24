@@ -4,6 +4,7 @@ import SwiftUI
 struct ShoppingContent: View {
     @EnvironmentObject var state: AppState
     @State private var newItem       = ""
+    @State private var filterStoreId: UUID? = nil
     @State private var expandedRecipes: Set<Int> = []
     @State private var showBasics    = false
     @State private var showStoreSheet = false
@@ -11,6 +12,12 @@ struct ShoppingContent: View {
     var doneCount: Int { state.shopping.filter(\.isDone).count }
     var progress: Double {
         state.shopping.isEmpty ? 0 : Double(doneCount) / Double(state.shopping.count)
+    }
+
+    var filteredStandalone: [ShoppingItem] {
+        let base = state.standaloneItems
+        guard let sid = filterStoreId else { return base }
+        return base.filter { $0.storeId == nil || $0.storeId == sid }
     }
 
     var body: some View {
@@ -31,7 +38,19 @@ struct ShoppingContent: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
                     .cornerRadius(12)
                 }
-                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+
+                // ── Supermarkt Filter-Pills ──
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        storeFilterPill(id: nil, name: "Alle")
+                        ForEach(state.supermarkets) { store in
+                            storeFilterPill(id: store.id, name: store.name)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 2)
+                }
+                .padding(.bottom, 10)
 
                 // Fortschritt
                 VStack(spacing: 8) {
@@ -70,7 +89,18 @@ struct ShoppingContent: View {
                             .frame(width: 44, height: 44).background(Theme.amber).cornerRadius(10)
                     }
                 }
-                .padding(.horizontal, 16).padding(.bottom, 16)
+                .padding(.horizontal, 16).padding(.bottom, 4)
+
+                // Hinweis: aktiver Filter
+                if let sid = filterStoreId,
+                   let storeName = state.supermarkets.first(where: { $0.id == sid })?.name {
+                    Text("Neue Artikel werden \(storeName) zugewiesen")
+                        .font(.system(size: 10)).foregroundColor(Theme.muted.opacity(0.7))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 16).padding(.bottom, 12)
+                } else {
+                    Spacer().frame(height: 12)
+                }
 
                 // ── Rezept-Sektionen (aufklappbar) ──
                 if !state.recipeGroups.isEmpty {
@@ -91,8 +121,8 @@ struct ShoppingContent: View {
                     Spacer().frame(height: 4)
                 }
 
-                // ── Einzelartikel (nach Gang sortiert) ──
-                let standalone = state.standaloneItems
+                // ── Einzelartikel (nach Gang sortiert, gefiltert nach Markt) ──
+                let standalone = filteredStandalone
                 if !standalone.isEmpty {
                     sectionHeader("ARTIKEL")
                     let aisles = standalone.map(\.aisle).uniqueOrdered()
@@ -102,7 +132,12 @@ struct ShoppingContent: View {
                                 .font(.system(size: 10, weight: .bold)).foregroundColor(Theme.muted.opacity(0.7))
                                 .tracking(0.5).padding(.horizontal, 16)
                             ForEach(standalone.filter { $0.aisle == aisle }) { item in
-                                ShoppingRow(item: item, onToggle: { toggleItem(item.id) }, onRemove: { removeItem(item.id) })
+                                let storeName = item.storeId.flatMap { sid in
+                                    state.supermarkets.first { $0.id == sid }?.name
+                                }
+                                ShoppingRow(item: item, storeName: storeName,
+                                    onToggle: { toggleItem(item.id) },
+                                    onRemove: { removeItem(item.id) })
                                     .padding(.horizontal, 16)
                             }
                         }
@@ -118,6 +153,23 @@ struct ShoppingContent: View {
         .sheet(isPresented: $showStoreSheet) { StorePickerSheet() }
     }
 
+    @ViewBuilder
+    private func storeFilterPill(id: UUID?, name: String) -> some View {
+        let isActive = filterStoreId == id
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { filterStoreId = id }
+        } label: {
+            Text(name)
+                .font(.system(size: 12, weight: isActive ? .bold : .regular))
+                .foregroundColor(isActive ? .white : Theme.dark)
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(isActive ? Theme.amber : Theme.white)
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(isActive ? Theme.amber : Theme.border, lineWidth: 1))
+                .cornerRadius(20)
+        }
+        .buttonStyle(.plain)
+    }
+
     private func sectionHeader(_ text: String) -> some View {
         Text(text).font(.system(size: 11, weight: .bold)).foregroundColor(Theme.muted)
             .tracking(0.5).frame(maxWidth: .infinity, alignment: .leading)
@@ -129,7 +181,8 @@ struct ShoppingContent: View {
         state.shopping.append(ShoppingItem(
             id: Int(Date().timeIntervalSince1970),
             name: newItem.trimmingCharacters(in: .whitespaces),
-            amount: "", isDone: false, aisle: "Sonstiges"
+            amount: "", isDone: false, aisle: "Sonstiges",
+            storeId: filterStoreId
         ))
         newItem = ""
     }
@@ -217,9 +270,10 @@ private struct RecipeShoppingSection: View {
     }
 }
 
-// MARK: - Einfache Shopping-Zeile
+// MARK: - Einfache Shopping-Zeile (mit optionalem Markt-Badge)
 struct ShoppingRow: View {
     let item: ShoppingItem
+    let storeName: String?
     let onToggle: () -> Void
     let onRemove: () -> Void
 
@@ -236,11 +290,21 @@ struct ShoppingRow: View {
                     }
                 }
             }
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(item.name).font(.system(size: 14, weight: .medium)).foregroundColor(Theme.dark)
                     .strikethrough(item.isDone, color: Theme.muted)
-                if !item.amount.isEmpty {
-                    Text(item.amount).font(.system(size: 11)).foregroundColor(Theme.muted)
+                HStack(spacing: 6) {
+                    if !item.amount.isEmpty {
+                        Text(item.amount).font(.system(size: 11)).foregroundColor(Theme.muted)
+                    }
+                    if let s = storeName {
+                        Text(s)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Theme.amber)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Theme.amberBg)
+                            .cornerRadius(5)
+                    }
                 }
             }
             Spacer()
@@ -305,7 +369,6 @@ private struct BasicsPruefenSection: View {
                         .opacity(basic.isAvailable ? 0.6 : 1)
                         Divider().padding(.leading, 48)
                     }
-                    // Neue Basic hinzufügen
                     HStack(spacing: 8) {
                         TextField("Basic hinzufügen...", text: $newBasic)
                             .font(.system(size: 13)).foregroundColor(Theme.dark)
@@ -366,7 +429,7 @@ struct StorePickerSheet: View {
                     }
                 }
                 Section {
-                    Text("Die Einkaufsliste wird automatisch nach den Gängen des gewählten Markts sortiert.")
+                    Text("Wähle einen Markt als Standard für die Gangssortierung. Artikel können einzeln einem Markt zugewiesen werden.")
                         .font(.caption).foregroundColor(Theme.muted)
                 }
             }

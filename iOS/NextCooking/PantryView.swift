@@ -17,9 +17,10 @@ struct PantryContent: View {
     var regular:  [PantryItem] { filtered.filter { !$0.isSpecial } }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
 
+            // ── Feste Kopfzeile ──
+            VStack(spacing: 0) {
                 // Ablauf-Warnung
                 if !state.expiringItems.isEmpty {
                     HStack(spacing: 8) {
@@ -74,27 +75,69 @@ struct PantryContent: View {
                             .frame(width: 44, height: 44).background(Theme.amber).cornerRadius(10)
                     }
                 }
-                .padding(.horizontal, 16).padding(.bottom, 14)
+                .padding(.horizontal, 16).padding(.bottom, 6)
 
-                // Sonderzutaten
-                if !specials.isEmpty {
-                    PantrySection(title: "✦ SONDERZUTATEN", titleColor: Theme.special, items: specials,
-                        onToggle: { toggle($0) }, onRemove: { remove($0) }, onEdit: { editingItem = $0 })
-                    Spacer().frame(height: 6)
-                }
-
-                // Vorrat
-                PantrySection(title: "VORRAT", titleColor: Theme.muted, items: regular,
-                    onToggle: { toggle($0) }, onRemove: { remove($0) }, onEdit: { editingItem = $0 })
+                Text("← Links wischen: Bearbeiten & Löschen")
+                    .font(.system(size: 10)).foregroundColor(Theme.muted.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 16).padding(.bottom, 8)
             }
+
+            // ── Liste mit Swipe-Aktionen ──
+            List {
+                if !specials.isEmpty {
+                    Section {
+                        ForEach(specials) { item in
+                            pantryRow(item)
+                        }
+                    } header: {
+                        Text("✦ SONDERZUTATEN")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Theme.special)
+                            .tracking(0.5)
+                    }
+                }
+                Section {
+                    ForEach(regular) { item in
+                        pantryRow(item)
+                    }
+                } header: {
+                    Text("VORRAT")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Theme.muted)
+                        .tracking(0.5)
+                }
+            }
+            .listStyle(.plain)
         }
         .sheet(item: $editingItem) { item in
-            PantryDateSheet(item: item) { updated in
+            PantryEditSheet(item: item) { updated in
                 if let i = state.pantry.firstIndex(where: { $0.id == updated.id }) {
                     state.pantry[i] = updated
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func pantryRow(_ item: PantryItem) -> some View {
+        PantryRow(item: item, onToggle: { toggle(item.id) })
+            .listRowBackground(item.isSpecial ? Theme.specialBg : Theme.white)
+            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+            .listRowSeparatorTint(Theme.border)
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                Button { toggle(item.id) } label: {
+                    Label(item.isSpecial ? "Normal" : "Sonder", systemImage: item.isSpecial ? "star.slash" : "star.fill")
+                }.tint(Theme.special)
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) { remove(item.id) } label: {
+                    Label("Löschen", systemImage: "trash")
+                }
+                Button { editingItem = item } label: {
+                    Label("Bearbeiten", systemImage: "pencil")
+                }.tint(.blue)
+            }
     }
 
     private func addItem() {
@@ -113,96 +156,52 @@ struct PantryContent: View {
     private func remove(_ id: Int) { state.pantry.removeAll { $0.id == id } }
 }
 
-// MARK: - Section
-private struct PantrySection: View {
-    let title: String
-    let titleColor: Color
-    let items: [PantryItem]
-    let onToggle: (Int) -> Void
-    let onRemove: (Int) -> Void
-    let onEdit:   (PantryItem) -> Void
-
-    var body: some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.system(size: 11, weight: .bold)).foregroundColor(titleColor)
-                    .tracking(0.5).padding(.horizontal, 16)
-                ForEach(items) { item in
-                    PantryRow(item: item,
-                        onToggle: { onToggle(item.id) },
-                        onRemove: { onRemove(item.id) },
-                        onEdit:   { onEdit(item) })
-                    .padding(.horizontal, 16)
-                }
-            }
-            .padding(.bottom, 14)
-        }
-    }
-}
-
-// MARK: - Row
+// MARK: - Row (Swipe für Edit/Delete, kein Tap nötig)
 struct PantryRow: View {
     let item: PantryItem
     let onToggle: () -> Void
-    let onRemove: () -> Void
-    let onEdit:   () -> Void
 
     var body: some View {
-        Button(action: onEdit) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(item.name)
-                            .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.dark)
-                        // Datum-Status Badge
-                        if item.dateStatus != .none {
-                            HStack(spacing: 3) {
-                                Image(systemName: item.dateStatus.icon).font(.system(size: 9))
-                                Text(item.dateStatus.label).font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundColor(Color(hex: item.dateStatus.colorHex))
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color(hex: item.dateStatus.colorHex).opacity(0.12))
-                            .cornerRadius(8)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(item.name)
+                        .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.dark)
+                    if item.dateStatus != .none {
+                        HStack(spacing: 3) {
+                            Image(systemName: item.dateStatus.icon).font(.system(size: 9))
+                            Text(item.dateStatus.label).font(.system(size: 9, weight: .bold))
                         }
-                    }
-                    HStack(spacing: 6) {
-                        Text(item.amount).font(.system(size: 11)).foregroundColor(Theme.muted)
-                        if let s = item.dateSummary {
-                            Text("· \(s)").font(.system(size: 10)).foregroundColor(Theme.muted.opacity(0.8))
-                        }
+                        .foregroundColor(Color(hex: item.dateStatus.colorHex))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color(hex: item.dateStatus.colorHex).opacity(0.12))
+                        .cornerRadius(8)
                     }
                 }
-                Spacer()
-                // Datum-Icon wenn leer (Einladung zum Eintragen)
-                if item.dateStatus == .none {
-                    Button(action: onEdit) {
-                        Image(systemName: "calendar.badge.plus")
-                            .font(.system(size: 14)).foregroundColor(Theme.muted.opacity(0.4))
+                HStack(spacing: 6) {
+                    Text(item.amount).font(.system(size: 11)).foregroundColor(Theme.muted)
+                    if let s = item.dateSummary {
+                        Text("· \(s)").font(.system(size: 10)).foregroundColor(Theme.muted.opacity(0.8))
                     }
                 }
-                Button(action: onToggle) {
-                    Text("✦").font(.system(size: 18))
-                        .foregroundColor(item.isSpecial ? Theme.special : Color(hex: "#CCCCCC"))
-                }
-                Button(action: onRemove) {
-                    Image(systemName: "xmark").font(.system(size: 12))
-                        .foregroundColor(Color(hex: "#CCCCCC"))
+                if let n = item.nutritionSummary {
+                    Text(n)
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.amber.opacity(0.85))
                 }
             }
+            Spacer()
+            Button(action: onToggle) {
+                Text("✦").font(.system(size: 18))
+                    .foregroundColor(item.isSpecial ? Theme.special : Color(hex: "#CCCCCC"))
+            }
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(item.isSpecial ? Theme.specialBg : Theme.white)
-        .overlay(RoundedRectangle(cornerRadius: 12)
-            .stroke(item.isSpecial ? Theme.special.opacity(0.27) : Theme.border, lineWidth: 1))
-        .cornerRadius(12)
+        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 }
 
-// MARK: - Datum Sheet (alle Datumstypen, nicht nur MHD)
-struct PantryDateSheet: View {
+// MARK: - Edit Sheet (Datum, Haltbarkeit & Nährwerte)
+struct PantryEditSheet: View {
     @State var item: PantryItem
     @Environment(\.dismiss) private var dismiss
     let onSave: (PantryItem) -> Void
@@ -211,6 +210,11 @@ struct PantryDateSheet: View {
     @State private var hasOpenedOn    = false
     @State private var hasConsumeBy   = false
     @State private var hasPurchasedOn = false
+
+    @State private var kcalStr:    String = ""
+    @State private var proteinStr: String = ""
+    @State private var fatStr:     String = ""
+    @State private var carbsStr:   String = ""
 
     var body: some View {
         NavigationStack {
@@ -237,6 +241,18 @@ struct PantryDateSheet: View {
                         .font(.caption)
                 }
 
+                Section {
+                    nutritionRow("Kalorien",       unit: "kcal", text: $kcalStr)
+                    nutritionRow("Eiweiß",         unit: "g",    text: $proteinStr)
+                    nutritionRow("Fett",           unit: "g",    text: $fatStr)
+                    nutritionRow("Kohlenhydrate",  unit: "g",    text: $carbsStr)
+                } header: {
+                    Text("Nährwerte (pro 100g)")
+                } footer: {
+                    Text("Optional — für persönliche Referenz und KI-Vorschläge.")
+                        .font(.caption)
+                }
+
                 if item.dateStatus != .none {
                     Section("Status") {
                         HStack(spacing: 6) {
@@ -253,13 +269,7 @@ struct PantryDateSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        if !hasBestBefore  { item.bestBefore  = nil }
-                        if !hasOpenedOn    { item.openedOn    = nil }
-                        if !hasConsumeBy   { item.consumeBy   = nil }
-                        if !hasPurchasedOn { item.purchasedOn = nil }
-                        onSave(item); dismiss()
-                    }.fontWeight(.bold)
+                    Button("Speichern") { save() }.fontWeight(.bold)
                 }
             }
             .onAppear {
@@ -267,21 +277,49 @@ struct PantryDateSheet: View {
                 hasOpenedOn    = item.openedOn    != nil
                 hasConsumeBy   = item.consumeBy   != nil
                 hasPurchasedOn = item.purchasedOn != nil
+                kcalStr    = item.kcal.map(String.init)    ?? ""
+                proteinStr = item.protein.map(String.init) ?? ""
+                fatStr     = item.fat.map(String.init)     ?? ""
+                carbsStr   = item.carbs.map(String.init)   ?? ""
             }
         }
     }
 
+    private func save() {
+        if !hasBestBefore  { item.bestBefore  = nil }
+        if !hasOpenedOn    { item.openedOn    = nil }
+        if !hasConsumeBy   { item.consumeBy   = nil }
+        if !hasPurchasedOn { item.purchasedOn = nil }
+        item.kcal    = Int(kcalStr)
+        item.protein = Int(proteinStr)
+        item.fat     = Int(fatStr)
+        item.carbs   = Int(carbsStr)
+        onSave(item); dismiss()
+    }
+
     @ViewBuilder
     private func dateRow(_ label: String, icon: String, isOn: Binding<Bool>, date: Binding<Date>) -> some View {
-        Toggle(isOn: isOn) {
-            Label(label, systemImage: icon)
-        }
-        .tint(Theme.amber)
+        Toggle(isOn: isOn) { Label(label, systemImage: icon) }.tint(Theme.amber)
         if isOn.wrappedValue {
             DatePicker("", selection: date, displayedComponents: .date)
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                .padding(.leading, 28)
+                .datePickerStyle(.compact).labelsHidden().padding(.leading, 28)
+        }
+    }
+
+    @ViewBuilder
+    private func nutritionRow(_ label: String, unit: String, text: Binding<String>) -> some View {
+        HStack {
+            Text(label).foregroundColor(Theme.dark)
+            Spacer()
+            TextField("0", text: text)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 70)
+                .foregroundColor(Theme.dark)
+            Text(unit)
+                .foregroundColor(Theme.muted)
+                .font(.system(size: 13))
+                .frame(width: 28, alignment: .leading)
         }
     }
 }

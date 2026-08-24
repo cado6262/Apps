@@ -76,6 +76,11 @@ struct PantryItem: Identifiable {
     var openedOn: Date?       // Geöffnet am
     var consumeBy: Date?      // Verbrauchen bis (nach Öffnen)
     var purchasedOn: Date?    // Gekauft am
+    // Nährwerte pro 100g — alle optional
+    var kcal: Int?
+    var protein: Int?
+    var fat: Int?
+    var carbs: Int?
 
     var dateStatus: DateStatus {
         let reference = consumeBy ?? bestBefore
@@ -96,6 +101,15 @@ struct PantryItem: Identifiable {
         if let d = openedOn    { parts.append("Geöffnet \(fmt.string(from: d))") }
         if let d = consumeBy   { parts.append("Verbrauchen bis \(fmt.string(from: d))") }
         if let d = purchasedOn { parts.append("Gekauft \(fmt.string(from: d))") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    var nutritionSummary: String? {
+        var parts: [String] = []
+        if let k = kcal    { parts.append("\(k) kcal") }
+        if let p = protein { parts.append("\(p)g E") }
+        if let f = fat     { parts.append("\(f)g F") }
+        if let c = carbs   { parts.append("\(c)g KH") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -139,6 +153,7 @@ struct ShoppingItem: Identifiable {
     var recipeName: String?
     var recipeEmoji: String?
     var isBasic: Bool = false   // Grundzutat (Zwiebeln, Salz, etc.)
+    var storeId: UUID? = nil    // nil = kein bestimmter Supermarkt zugewiesen
 
     static let defaults: [ShoppingItem] = [
         ShoppingItem(id: 1, name: "Ramen Nudeln",       amount: "200g",   isDone: false, aisle: "Nudeln & Reis",  recipeId: 1, recipeName: "Miso-Ramen mit Shiitake",   recipeEmoji: "🍜"),

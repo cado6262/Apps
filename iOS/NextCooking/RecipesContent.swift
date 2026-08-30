@@ -146,12 +146,14 @@ struct RecipesContent: View {
             }
             .listStyle(.plain)
             .toolbar {
-                if segment == 0 && search.isEmpty {
-                    EditButton()
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    if segment == 0 {
+                        if search.isEmpty { EditButton() }
+                        Button { showNewRecipe = true } label: {
+                            Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
+                        }
+                    }
                 }
-            }
-            .safeAreaInset(edge: .bottom) {
-                addButton
             }
         }
     }

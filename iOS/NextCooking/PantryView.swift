@@ -7,6 +7,9 @@ struct PantryContent: View {
     @State private var newName   = ""
     @State private var newAmount = ""
     @State private var editingItem: PantryItem?
+    @State private var showBasics    = false
+    @State private var editingBasics = false
+    @State private var newBasicName  = ""
     @FocusState private var nameActive: Bool
 
     var filtered: [PantryItem] {
@@ -80,7 +83,9 @@ struct PantryContent: View {
                 Text("← Links wischen: Bearbeiten & Löschen")
                     .font(.system(size: 10)).foregroundColor(Theme.muted.opacity(0.6))
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.horizontal, 16).padding(.bottom, 8)
+                    .padding(.horizontal, 16).padding(.bottom, 4)
+
+                basicsCard
             }
 
             // ── Liste mit Swipe-Aktionen ──
@@ -106,33 +111,6 @@ struct PantryContent: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(Theme.muted)
                         .tracking(0.5)
-                }
-                // ── Basics ──
-                Section {
-                    ForEach($state.basics) { $basic in
-                        HStack(spacing: 12) {
-                            Image(systemName: basic.isAvailable ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(basic.isAvailable ? Theme.green : Color(hex: "#CCCCCC"))
-                                .font(.system(size: 18))
-                            Text(basic.name)
-                                .font(.system(size: 14))
-                                .foregroundColor(basic.isAvailable ? Theme.dark : Theme.muted)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                        .contentShape(Rectangle())
-                        .onTapGesture { basic.isAvailable.toggle() }
-                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16))
-                        .listRowBackground(basic.isAvailable ? Theme.white : Theme.cream)
-                    }
-                } header: {
-                    Text("BASICS PRÜFEN")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Theme.muted)
-                        .tracking(0.5)
-                } footer: {
-                    Text("Grundzutaten die meist zuhause sind — tippe um zu markieren.")
-                        .font(.caption)
                 }
             }
             .listStyle(.plain)
@@ -165,6 +143,139 @@ struct PantryContent: View {
                     Label("Bearbeiten", systemImage: "pencil")
                 }.tint(.blue)
             }
+    }
+
+    // MARK: - Basics card
+
+    @ViewBuilder
+    private var basicsCard: some View {
+        VStack(spacing: 0) {
+            // Header row — always visible
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showBasics.toggle()
+                    if !showBasics { editingBasics = false }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BASICS")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Theme.muted)
+                            .tracking(0.5)
+                        let missing = state.basics.filter { !$0.isAvailable }.count
+                        Text(missing == 0 ? "Alles vorhanden" : "\(missing) fehlt/fehlen")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(missing == 0 ? Theme.green : Theme.amber)
+                    }
+                    Spacer()
+                    HStack(spacing: 3) {
+                        ForEach(state.basics.prefix(9)) { basic in
+                            Circle()
+                                .fill(basic.isAvailable ? Theme.green : Color(hex: "#CCCCCC"))
+                                .frame(width: 5, height: 5)
+                        }
+                        if state.basics.count > 9 {
+                            Text("+\(state.basics.count - 9)")
+                                .font(.system(size: 9)).foregroundColor(Theme.muted)
+                        }
+                    }
+                    Image(systemName: showBasics ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Theme.muted)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11)
+            }
+            .buttonStyle(.plain)
+
+            if showBasics {
+                Divider()
+
+                if editingBasics {
+                    // Edit mode — chips with X + add field
+                    VStack(alignment: .leading, spacing: 10) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
+                            ForEach(state.basics) { basic in
+                                HStack(spacing: 5) {
+                                    Text(basic.name)
+                                        .font(.system(size: 12))
+                                        .lineLimit(1)
+                                    Button {
+                                        state.basics.removeAll { $0.id == basic.id }
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(Theme.muted)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 7)
+                                .background(Theme.cream)
+                                .foregroundColor(Theme.dark)
+                                .cornerRadius(20)
+                                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.border, lineWidth: 1))
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            TextField("Neue Grundzutat…", text: $newBasicName)
+                                .font(.system(size: 13))
+                                .onSubmit { addBasic() }
+                            Button(action: addBasic) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundColor(Theme.amber)
+                                    .font(.system(size: 22))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .background(Theme.amberBg)
+                        .cornerRadius(10)
+                    }
+                    .padding(12)
+                } else {
+                    // View mode — colored chip grid, tap to toggle
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
+                        ForEach($state.basics) { $basic in
+                            HStack(spacing: 5) {
+                                Image(systemName: basic.isAvailable ? "checkmark" : "xmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                Text(basic.name)
+                                    .font(.system(size: 12))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(basic.isAvailable ? Theme.greenBg : Theme.cream)
+                            .foregroundColor(basic.isAvailable ? Theme.green : Theme.muted)
+                            .cornerRadius(20)
+                            .onTapGesture { basic.isAvailable.toggle() }
+                        }
+                    }
+                    .padding(12)
+                }
+
+                Divider()
+                HStack {
+                    Spacer()
+                    Button(editingBasics ? "Fertig" : "Bearbeiten") {
+                        withAnimation(.easeInOut(duration: 0.15)) { editingBasics.toggle() }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.amber)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                }
+            }
+        }
+        .background(Theme.white)
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+        .padding(.horizontal, 16).padding(.bottom, 8)
+    }
+
+    private func addBasic() {
+        let name = newBasicName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        state.basics.append(BasicItem(name: name))
+        newBasicName = ""
     }
 
     private func addItem() {

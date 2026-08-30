@@ -91,12 +91,24 @@ class AppState: ObservableObject {
     }
 
     // MARK: - Planner
-    func fillWeekWithAI() {
+    func fillWeekWithAI(meal: Int = 1) {
         week = week.enumerated().map { (i, day) in
             var d = day
-            d.recipe = recipes[i % recipes.count].name
-            d.emoji  = recipes[i % recipes.count].emoji
+            let r = recipes[i % recipes.count]
+            if meal == 0 {
+                d.breakfast      = r.name
+                d.breakfastEmoji = r.emoji
+            } else {
+                d.recipe = r.name
+                d.emoji  = r.emoji
+            }
             return d
+        }
+    }
+
+    func toggleFavorite(recipeId: Int) {
+        if let i = recipes.firstIndex(where: { $0.id == recipeId }) {
+            recipes[i].isFavorite.toggle()
         }
     }
 

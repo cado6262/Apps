@@ -15,11 +15,13 @@ struct Recipe: Identifiable, Codable {
     var protein: Int?
     var fat: Int?
     var carbs: Int?
+    var isFavorite: Bool = false  // nicht in CodingKeys → überlebt JSON-Parsing
 
     enum CodingKeys: String, CodingKey {
         case id, name, time, match, uses, emoji, desc, kcal, protein, fat, carbs
         case category = "cat"
         case isBatch  = "batch"
+        // isFavorite intentionally excluded: defaults to false when decoded from AI JSON
     }
 
     static let defaults: [Recipe] = [
@@ -207,16 +209,18 @@ struct Supermarket: Identifiable, Codable {
 struct WeekDay: Identifiable {
     var id: Int
     var shortName: String
-    var recipe: String?
+    var recipe: String?          // Hauptgericht / Abendessen
     var emoji: String?
+    var breakfast: String?       // Frühstück
+    var breakfastEmoji: String?
 
     static let defaults: [WeekDay] = [
-        WeekDay(id: 0, shortName: "Mo", recipe: "Linsen-Dhal",    emoji: "🍛"),
+        WeekDay(id: 0, shortName: "Mo", recipe: "Linsen-Dhal",    emoji: "🍛", breakfast: "Haferflocken mit Beeren", breakfastEmoji: "🫐"),
         WeekDay(id: 1, shortName: "Di", recipe: nil,               emoji: nil),
         WeekDay(id: 2, shortName: "Mi", recipe: "Miso-Ramen",      emoji: "🍜"),
-        WeekDay(id: 3, shortName: "Do", recipe: nil,               emoji: nil),
+        WeekDay(id: 3, shortName: "Do", recipe: nil,               emoji: nil,  breakfast: "Rührei & Toast",          breakfastEmoji: "🍳"),
         WeekDay(id: 4, shortName: "Fr", recipe: "Bolognese",       emoji: "🍝"),
-        WeekDay(id: 5, shortName: "Sa", recipe: "Sumach-Hähnchen", emoji: "🍗"),
+        WeekDay(id: 5, shortName: "Sa", recipe: "Sumach-Hähnchen", emoji: "🍗", breakfast: "Pancakes",               breakfastEmoji: "🥞"),
         WeekDay(id: 6, shortName: "So", recipe: nil,               emoji: nil),
     ]
 }

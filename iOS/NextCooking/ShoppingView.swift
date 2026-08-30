@@ -7,6 +7,8 @@ struct ShoppingContent: View {
     @State private var filterStoreId: UUID? = nil
     @State private var expandedRecipes: Set<Int> = []
     @State private var showBasics       = false
+    @State private var editingBasics    = false
+    @State private var newBasicName     = ""
     @State private var showStorePicker  = false   // Dialog: Markt für neuen Artikel
     @State private var showAddStore     = false   // Alert: neuen Supermarkt anlegen
     @State private var newStoreName     = ""
@@ -31,9 +33,26 @@ struct ShoppingContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Basics — fixiert oben, scrollt nicht weg ──
-            BasicsPruefenSection(isExpanded: $showBasics)
+            // ── Feste Kopfzeile (wie Vorrat) ──
+            VStack(spacing: 0) {
+                // Artikel hinzufügen
+                HStack(spacing: 8) {
+                    TextField("Artikel hinzufügen...", text: $newItem)
+                        .font(.system(size: 14)).foregroundColor(Theme.dark)
+                        .onSubmit { triggerAdd() }
+                        .padding(10)
+                        .background(Theme.white)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+                        .cornerRadius(10)
+                    Button(action: triggerAdd) {
+                        Text("+").font(.system(size: 20, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 44, height: 44).background(Theme.amber).cornerRadius(10)
+                    }
+                }
                 .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
+
+                basicsCard
+            }
 
         ScrollView {
             VStack(spacing: 0) {
@@ -89,22 +108,6 @@ struct ShoppingContent: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
                 .cornerRadius(14)
                 .padding(.horizontal, 16).padding(.bottom, 12)
-
-                // Neue Zutat — "+" öffnet Markt-Auswahl
-                HStack(spacing: 8) {
-                    TextField("Artikel hinzufügen...", text: $newItem)
-                        .font(.system(size: 14)).foregroundColor(Theme.dark)
-                        .onSubmit { triggerAdd() }
-                        .padding(10)
-                        .background(Theme.white)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
-                        .cornerRadius(10)
-                    Button(action: triggerAdd) {
-                        Text("+").font(.system(size: 20, weight: .bold)).foregroundColor(.white)
-                            .frame(width: 44, height: 44).background(Theme.amber).cornerRadius(10)
-                    }
-                }
-                .padding(.horizontal, 16).padding(.bottom, 16)
 
                 // ── Rezept-Sektionen (aufklappbar) ──
                 if !state.recipeGroups.isEmpty {
@@ -187,6 +190,127 @@ struct ShoppingContent: View {
             Button("Hinzufügen") { addStore() }
             Button("Abbrechen", role: .cancel) { newStoreName = "" }
         }
+    }
+
+    // MARK: - Basics card (same design as PantryView)
+
+    @ViewBuilder
+    private var basicsCard: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showBasics.toggle()
+                    if !showBasics { editingBasics = false }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BASICS")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Theme.muted)
+                            .tracking(0.5)
+                        let missing = state.basics.filter { !$0.isAvailable }.count
+                        Text(missing == 0 ? "Alles vorhanden" : "\(missing) fehlt/fehlen")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(missing == 0 ? Theme.green : Theme.amber)
+                    }
+                    Spacer()
+                    HStack(spacing: 3) {
+                        ForEach(state.basics.prefix(9)) { basic in
+                            Circle()
+                                .fill(basic.isAvailable ? Theme.green : Color(hex: "#CCCCCC"))
+                                .frame(width: 5, height: 5)
+                        }
+                        if state.basics.count > 9 {
+                            Text("+\(state.basics.count - 9)")
+                                .font(.system(size: 9)).foregroundColor(Theme.muted)
+                        }
+                    }
+                    Image(systemName: showBasics ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Theme.muted)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11)
+            }
+            .buttonStyle(.plain)
+
+            if showBasics {
+                Divider()
+                if editingBasics {
+                    VStack(alignment: .leading, spacing: 10) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
+                            ForEach(state.basics) { basic in
+                                HStack(spacing: 5) {
+                                    Text(basic.name).font(.system(size: 12)).lineLimit(1)
+                                    Button {
+                                        state.basics.removeAll { $0.id == basic.id }
+                                    } label: {
+                                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundColor(Theme.muted)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 7)
+                                .background(Theme.cream)
+                                .foregroundColor(Theme.dark)
+                                .cornerRadius(20)
+                                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.border, lineWidth: 1))
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            TextField("Neue Grundzutat…", text: $newBasicName)
+                                .font(.system(size: 13))
+                                .onSubmit { addBasic() }
+                            Button(action: addBasic) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundColor(Theme.amber).font(.system(size: 22))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .background(Theme.amberBg)
+                        .cornerRadius(10)
+                    }
+                    .padding(12)
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
+                        ForEach($state.basics) { $basic in
+                            HStack(spacing: 5) {
+                                Image(systemName: basic.isAvailable ? "checkmark" : "xmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                Text(basic.name).font(.system(size: 12)).lineLimit(1)
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(basic.isAvailable ? Theme.greenBg : Theme.cream)
+                            .foregroundColor(basic.isAvailable ? Theme.green : Theme.muted)
+                            .cornerRadius(20)
+                            .onTapGesture { basic.isAvailable.toggle() }
+                        }
+                    }
+                    .padding(12)
+                }
+                Divider()
+                HStack {
+                    Spacer()
+                    Button(editingBasics ? "Fertig" : "Bearbeiten") {
+                        withAnimation(.easeInOut(duration: 0.15)) { editingBasics.toggle() }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.amber)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                }
+            }
+        }
+        .background(Theme.white)
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+        .padding(.horizontal, 16).padding(.bottom, 8)
+    }
+
+    private func addBasic() {
+        let name = newBasicName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        state.basics.append(BasicItem(name: name))
+        newBasicName = ""
     }
 
     // MARK: - Store Tab
@@ -385,79 +509,6 @@ struct ShoppingRow: View {
         .cornerRadius(12)
         .opacity(item.isDone ? 0.5 : 1)
         .padding(.bottom, 6)
-    }
-}
-
-// MARK: - Basics prüfen
-private struct BasicsPruefenSection: View {
-    @EnvironmentObject var state: AppState
-    @Binding var isExpanded: Bool
-    @State private var newBasic = ""
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Button { withAnimation { isExpanded.toggle() } } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.seal").font(.system(size: 16)).foregroundColor(Theme.muted)
-                    Text("Basics prüfen")
-                        .font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.dark)
-                    Spacer()
-                    Text("Grundzutaten zuhause?")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted)
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11)).foregroundColor(Theme.muted)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(Theme.white)
-            }
-            .buttonStyle(.plain)
-
-            if isExpanded {
-                VStack(spacing: 0) {
-                    ForEach($state.basics) { $basic in
-                        HStack(spacing: 12) {
-                            Button { basic.isAvailable.toggle() } label: {
-                                ZStack {
-                                    Circle().stroke(basic.isAvailable ? Theme.green : Color(hex: "#DDDDDD"), lineWidth: 2)
-                                        .frame(width: 22, height: 22)
-                                    if basic.isAvailable {
-                                        Circle().fill(Theme.green).frame(width: 22, height: 22)
-                                        Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
-                                    }
-                                }
-                            }
-                            Text(basic.name).font(.system(size: 14)).foregroundColor(Theme.dark)
-                            Spacer()
-                            if !basic.isAvailable {
-                                Text("fehlt").font(.system(size: 11, weight: .semibold)).foregroundColor(Color(hex: "#CC3333"))
-                            }
-                        }
-                        .padding(.horizontal, 14).padding(.vertical, 9)
-                        .opacity(basic.isAvailable ? 0.6 : 1)
-                        Divider().padding(.leading, 48)
-                    }
-                    HStack(spacing: 8) {
-                        TextField("Basic hinzufügen...", text: $newBasic)
-                            .font(.system(size: 13)).foregroundColor(Theme.dark)
-                            .onSubmit { addBasic() }
-                        Button(action: addBasic) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 20)).foregroundColor(Theme.amber)
-                        }
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                }
-                .background(Theme.white)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
-    }
-
-    private func addBasic() {
-        guard !newBasic.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        state.basics.append(BasicItem(name: newBasic.trimmingCharacters(in: .whitespaces)))
-        newBasic = ""
     }
 }
 

@@ -11,7 +11,7 @@ class AppState: ObservableObject {
     @Published var pantry: [PantryItem]          = PantryItem.defaults
     @Published var shopping: [ShoppingItem]      = ShoppingItem.defaults
     @Published var basics: [BasicItem]           = BasicItem.defaults
-    @Published var week: [WeekDay]               = WeekDay.defaults
+    @Published var weekPlans: [Int: [WeekDay]]   = [0: WeekDay.defaults]  // key = week offset from now
     @Published var supermarkets: [Supermarket]   = Supermarket.defaults
     @Published var selectedSupermarketId: UUID?  = Supermarket.defaults.first?.id
     @Published var mealTypes: [MealType]          = MealType.defaults
@@ -100,9 +100,21 @@ class AppState: ObservableObject {
     }
 
     // MARK: - Planner helpers
-    func getMeal(dayIndex: Int, typeName: String) -> (recipe: String, emoji: String)? {
-        guard week.indices.contains(dayIndex) else { return nil }
-        let day = week[dayIndex]
+
+    func weekPlan(offset: Int) -> [WeekDay] {
+        weekPlans[offset] ?? emptyWeek()
+    }
+
+    private func emptyWeek() -> [WeekDay] {
+        ["Mo","Di","Mi","Do","Fr","Sa","So"].enumerated().map { i, name in
+            WeekDay(id: i, shortName: name)
+        }
+    }
+
+    func getMeal(weekOffset: Int = 0, dayIndex: Int, typeName: String) -> (recipe: String, emoji: String)? {
+        let plan = weekPlan(offset: weekOffset)
+        guard plan.indices.contains(dayIndex) else { return nil }
+        let day = plan[dayIndex]
         switch typeName {
         case "Hauptgericht":
             guard let r = day.recipe, let e = day.emoji else { return nil }
@@ -116,30 +128,62 @@ class AppState: ObservableObject {
         }
     }
 
-    func setMeal(dayIndex: Int, typeName: String, recipe: String?, emoji: String?) {
-        guard week.indices.contains(dayIndex) else { return }
+    func setMeal(weekOffset: Int = 0, dayIndex: Int, typeName: String, recipe: String?, emoji: String?) {
+        if weekPlans[weekOffset] == nil { weekPlans[weekOffset] = emptyWeek() }
+        guard weekPlans[weekOffset]!.indices.contains(dayIndex) else { return }
         switch typeName {
         case "Hauptgericht":
-            week[dayIndex].recipe = recipe
-            week[dayIndex].emoji  = emoji
+            weekPlans[weekOffset]![dayIndex].recipe = recipe
+            weekPlans[weekOffset]![dayIndex].emoji  = emoji
         case "Frühstück":
-            week[dayIndex].breakfast      = recipe
-            week[dayIndex].breakfastEmoji = emoji
+            weekPlans[weekOffset]![dayIndex].breakfast      = recipe
+            weekPlans[weekOffset]![dayIndex].breakfastEmoji = emoji
         default:
             if let r = recipe, let e = emoji {
-                week[dayIndex].customMeals[typeName] = WeekMealEntry(recipe: r, emoji: e)
+                weekPlans[weekOffset]![dayIndex].customMeals[typeName] = WeekMealEntry(recipe: r, emoji: e)
             } else {
-                week[dayIndex].customMeals.removeValue(forKey: typeName)
+                weekPlans[weekOffset]![dayIndex].customMeals.removeValue(forKey: typeName)
             }
         }
     }
 
-    func fillWeekWithAI(mealTypeName: String) {
+    func fillWeekWithAI(mealTypeName: String, weekOffset: Int = 0) {
         guard !recipes.isEmpty else { return }
-        for i in week.indices {
+        for i in 0..<7 {
             let r = recipes[i % recipes.count]
-            setMeal(dayIndex: i, typeName: mealTypeName, recipe: r.name, emoji: r.emoji)
+            setMeal(weekOffset: weekOffset, dayIndex: i, typeName: mealTypeName, recipe: r.name, emoji: r.emoji)
         }
+    }
+
+    func loadAndFillWeekWithAI(mealType: MealType, weekOffset: Int = 0) async {
+        isLoadingAI = true
+        defer { isLoadingAI = false }
+
+        let ctx = mealTypePromptContext(mealType.name)
+        let allIngredients = pantry.map(\.name).joined(separator: ", ")
+        let expiringHints = pantry.compactMap { item -> String? in
+            guard let hint = item.aiHint else { return nil }
+            return "\(item.name) (\(hint))"
+        }.joined(separator: "; ")
+        let expiringLine = expiringHints.isEmpty ? "" : " Priorität: \(expiringHints)."
+
+        let prompt = """
+        Kochassistent. Mahlzeit-Typ: \(ctx). Vorrat: \(allIngredients).\(expiringLine) \
+        Genau 4 passende Rezepte NUR für \(mealType.name) vorschlagen (strikt diese Kategorie!). \
+        NUR JSON: [{"id":1,"name":"Name","time":15,"match":92,"uses":["Zutat"],"cat":"Küche","emoji":"🍳","batch":false,"desc":"Beschreibung","kcal":350,"protein":18,"fat":10,"carbs":45}]
+        """
+        await callAnthropicAPI(prompt: prompt)
+        fillWeekWithAI(mealTypeName: mealType.name, weekOffset: weekOffset)
+    }
+
+    private func mealTypePromptContext(_ name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("frühstück") || lower.contains("breakfast") {
+            return "Frühstück — NUR typische Frühstücksgerichte (Müsli, Eier, Toast, Pancakes, Porridge, Joghurt, Smoothie-Bowl). KEINE Hauptgerichte, KEINE Paella, KEINE schweren Mahlzeiten"
+        }
+        if lower.contains("snack") { return "Snacks / Zwischenmahlzeiten (schnell, leicht, handlich)" }
+        if lower.contains("mittag") || lower.contains("lunch") { return "Mittagessen (leichte bis mittelschwere Gerichte)" }
+        return "Abendessen / Hauptgericht (herzhafte, vollständige, warme Mahlzeiten)"
     }
 
     func toggleFavorite(recipeId: Int) {

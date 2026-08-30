@@ -22,6 +22,7 @@ struct RecipeEditSheet: View {
     @State private var steps: [String]       = [""]
     @State private var ingredients: [String] = [""]
     @State private var photoData: Data?      = nil
+    @State private var selectedMealTypes: [String] = []
 
     @State private var selectedPhoto: PhotosPickerItem? = nil
     @State private var showCamera = false
@@ -36,6 +37,7 @@ struct RecipeEditSheet: View {
                 basicSection
                 ingredientsSection
                 stepsSection
+                mealTypeSection
                 nutritionSection
                 if isEdit { deleteSection }
             }
@@ -242,6 +244,37 @@ struct RecipeEditSheet: View {
     }
 
     @ViewBuilder
+    private var mealTypeSection: some View {
+        Section {
+            let columns = [GridItem(.adaptive(minimum: 100), spacing: 8)]
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(state.mealTypes) { mt in
+                    let isOn = selectedMealTypes.contains(mt.name)
+                    HStack(spacing: 5) {
+                        Text(mt.emoji).font(.system(size: 13))
+                        Text(mt.name).font(.system(size: 12, weight: isOn ? .semibold : .regular))
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .frame(maxWidth: .infinity)
+                    .background(isOn ? Theme.amber : Theme.cream)
+                    .foregroundColor(isOn ? .white : Theme.dark)
+                    .cornerRadius(14)
+                    .onTapGesture {
+                        if isOn { selectedMealTypes.removeAll { $0 == mt.name } }
+                        else    { selectedMealTypes.append(mt.name) }
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text("Passt zu (Mahlzeit-Kategorie)")
+        } footer: {
+            Text("Wähle eine oder mehrere Kategorien — für die Filterung in \"Meine Rezepte\".")
+                .font(.caption)
+        }
+    }
+
+    @ViewBuilder
     private var nutritionSection: some View {
         Section {
             nutritionRow(label: "Kalorien", unit: "kcal", binding: $kcalStr)
@@ -297,9 +330,10 @@ struct RecipeEditSheet: View {
         proteinStr = r.protein.map { "\($0)" } ?? ""
         fatStr     = r.fat.map     { "\($0)" } ?? ""
         carbsStr   = r.carbs.map   { "\($0)" } ?? ""
-        steps      = r.steps.isEmpty ? [""] : r.steps
-        ingredients = r.detailIngredients.isEmpty ? [""] : r.detailIngredients
-        photoData  = r.photoData
+        steps             = r.steps.isEmpty ? [""] : r.steps
+        ingredients       = r.detailIngredients.isEmpty ? [""] : r.detailIngredients
+        photoData         = r.photoData
+        selectedMealTypes = r.mealTypes
     }
 
     private func save() {
@@ -327,6 +361,7 @@ struct RecipeEditSheet: View {
         recipe.detailIngredients  = cleanIngredients
         recipe.photoData          = photoData
         recipe.isFavorite         = existingRecipe?.isFavorite ?? false
+        recipe.mealTypes          = selectedMealTypes
 
         if let cb = onSave {
             cb(recipe)

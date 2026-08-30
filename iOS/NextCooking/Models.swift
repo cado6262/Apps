@@ -19,6 +19,7 @@ struct Recipe: Identifiable, Codable {
     var steps: [String]      = []     // Kochschritte
     var detailIngredients: [String] = []  // Zutaten mit Mengenangaben
     var photoData: Data?     = nil    // eigenes Foto
+    var mealTypes: [String]  = []     // Mahlzeit-Kategorien (Frühstück, Hauptgericht, …)
 
     enum CodingKeys: String, CodingKey {
         case id, name, time, match, uses, emoji, desc, kcal, protein, fat, carbs

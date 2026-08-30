@@ -3,20 +3,33 @@ import SwiftUI
 struct PlannerView: View {
     @EnvironmentObject var state: AppState
     @State private var selectedMealTypeName: String = "Hauptgericht"
+    @State private var weekOffset = 0
     @State private var pickingFor: DayPick? = nil
     @State private var showAddMealType   = false
     @State private var newMealTypeName   = ""
-    @State private var newMealTypeEmoji  = ""
     @State private var draggingMealType: String? = nil
 
     var selectedMealType: MealType {
         state.mealTypes.first { $0.name == selectedMealTypeName } ?? MealType.defaults[1]
     }
 
+    var currentWeek: [WeekDay] { state.weekPlan(offset: weekOffset) }
+
+    private func weekLabel(_ offset: Int) -> String {
+        switch offset {
+        case 0:  return "Diese Woche"
+        case 1:  return "Nächste Woche"
+        case -1: return "Letzte Woche"
+        case 2...: return "in \(offset) Wochen"
+        default: return "vor \(-offset) Wochen"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 mealTypeTabs
+                weekNavRow
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -43,27 +56,36 @@ struct PlannerView: View {
         }
         .sheet(item: $pickingFor) { pick in
             RecipePickerSheet(
-                title: "\(state.week[pick.id].shortName) – \(selectedMealType.emoji) \(selectedMealType.name)"
+                title: "\(currentWeek[pick.id].shortName) – \(selectedMealType.emoji) \(selectedMealType.name)"
             ) { name, emoji in
-                state.setMeal(dayIndex: pick.id, typeName: selectedMealType.name, recipe: name, emoji: emoji)
+                state.setMeal(weekOffset: weekOffset, dayIndex: pick.id, typeName: selectedMealType.name, recipe: name, emoji: emoji)
             }
         }
         .alert("Neue Mahlzeit", isPresented: $showAddMealType) {
-            TextField("Emoji (z.B. 🥗)", text: $newMealTypeEmoji)
             TextField("Name (z.B. Mittagessen)", text: $newMealTypeName)
             Button("Hinzufügen") {
                 let name = newMealTypeName.trimmingCharacters(in: .whitespaces)
                 guard !name.isEmpty else { return }
-                let emoji = newMealTypeEmoji.isEmpty ? "🍴" : newMealTypeEmoji
+                let emoji = emojiForMealType(name)
                 state.mealTypes.append(MealType(name: name, emoji: emoji))
                 selectedMealTypeName = name
-                newMealTypeName  = ""
-                newMealTypeEmoji = ""
+                newMealTypeName = ""
             }
             Button("Abbrechen", role: .cancel) {}
         } message: {
             Text("Lege eine eigene Mahlzeit an — z.B. Snack, Mittagessen oder Pre-Workout.")
         }
+    }
+
+    private func emojiForMealType(_ name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("frühstück") || lower.contains("breakfast") { return "🌅" }
+        if lower.contains("mittag") || lower.contains("lunch")        { return "☀️" }
+        if lower.contains("snack")                                     { return "🥨" }
+        if lower.contains("abend") || lower.contains("dinner")        { return "🌙" }
+        if lower.contains("sport") || lower.contains("workout")       { return "💪" }
+        if lower.contains("dessert") || lower.contains("süß")         { return "🍮" }
+        return "🍴"
     }
 
     // MARK: - Meal type chip row (drag-to-reorder)
@@ -117,21 +139,63 @@ struct PlannerView: View {
         Divider()
     }
 
+    // MARK: - Week navigation row
+
+    @ViewBuilder
+    private var weekNavRow: some View {
+        HStack(spacing: 0) {
+            Button {
+                weekOffset -= 1
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.amber)
+                    .padding(.horizontal, 20).padding(.vertical, 10)
+            }
+            Spacer()
+            Text(weekLabel(weekOffset))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(weekOffset == 0 ? Theme.amber : Theme.dark)
+            Spacer()
+            Button {
+                weekOffset += 1
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.amber)
+                    .padding(.horizontal, 20).padding(.vertical, 10)
+            }
+        }
+        .background(Theme.white)
+        Divider()
+    }
+
     // MARK: - KI planen button
 
     @ViewBuilder
     private var aiPlanButton: some View {
         HStack {
             Spacer()
-            Button { state.fillWeekWithAI(mealTypeName: selectedMealType.name) } label: {
+            Button {
+                Task { await state.loadAndFillWeekWithAI(mealType: selectedMealType, weekOffset: weekOffset) }
+            } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
-                    Text("KI planen").font(.system(size: 12, weight: .semibold))
+                    if state.isLoadingAI {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.75)
+                    } else {
+                        Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
+                    }
+                    Text(state.isLoadingAI ? "Plane…" : "KI planen")
+                        .font(.system(size: 12, weight: .semibold))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Theme.amber).cornerRadius(10)
+                .background(state.isLoadingAI ? Theme.amber.opacity(0.6) : Theme.amber)
+                .cornerRadius(10)
             }
+            .disabled(state.isLoadingAI)
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
     }
@@ -140,8 +204,8 @@ struct PlannerView: View {
 
     @ViewBuilder
     private var weekRows: some View {
-        ForEach(Array(state.week.enumerated()), id: \.element.id) { index, day in
-            let meal = state.getMeal(dayIndex: index, typeName: selectedMealType.name)
+        ForEach(Array(currentWeek.enumerated()), id: \.element.id) { index, day in
+            let meal = state.getMeal(weekOffset: weekOffset, dayIndex: index, typeName: selectedMealType.name)
             WeekDayRow(
                 day: day,
                 dayNumber: index + 1,
@@ -149,11 +213,11 @@ struct PlannerView: View {
                 recipeEmoji: meal?.emoji,
                 onTap: { pickingFor = DayPick(id: index) },
                 onClear: {
-                    state.setMeal(dayIndex: index, typeName: selectedMealType.name, recipe: nil, emoji: nil)
+                    state.setMeal(weekOffset: weekOffset, dayIndex: index, typeName: selectedMealType.name, recipe: nil, emoji: nil)
                 },
                 onLongPress: {
                     if let r = state.recipes.randomElement() {
-                        state.setMeal(dayIndex: index, typeName: selectedMealType.name, recipe: r.name, emoji: r.emoji)
+                        state.setMeal(weekOffset: weekOffset, dayIndex: index, typeName: selectedMealType.name, recipe: r.name, emoji: r.emoji)
                     }
                 }
             )

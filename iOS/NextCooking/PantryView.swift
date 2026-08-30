@@ -107,6 +107,33 @@ struct PantryContent: View {
                         .foregroundColor(Theme.muted)
                         .tracking(0.5)
                 }
+                // ── Basics ──
+                Section {
+                    ForEach($state.basics) { $basic in
+                        HStack(spacing: 12) {
+                            Image(systemName: basic.isAvailable ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(basic.isAvailable ? Theme.green : Color(hex: "#CCCCCC"))
+                                .font(.system(size: 18))
+                            Text(basic.name)
+                                .font(.system(size: 14))
+                                .foregroundColor(basic.isAvailable ? Theme.dark : Theme.muted)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                        .onTapGesture { basic.isAvailable.toggle() }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16))
+                        .listRowBackground(basic.isAvailable ? Theme.white : Theme.cream)
+                    }
+                } header: {
+                    Text("BASICS PRÜFEN")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Theme.muted)
+                        .tracking(0.5)
+                } footer: {
+                    Text("Grundzutaten die meist zuhause sind — tippe um zu markieren.")
+                        .font(.caption)
+                }
             }
             .listStyle(.plain)
         }

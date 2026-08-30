@@ -2,19 +2,30 @@ import SwiftUI
 
 struct RecipesContent: View {
     @EnvironmentObject var state: AppState
-    @State private var showNewRecipe    = false
+    @State private var showNewRecipe      = false
     @State private var editingRecipe: Recipe? = nil
-    @State private var search          = ""
-    @State private var segment         = 0  // 0 = Meine, 1 = KI-Vorschläge
+    @State private var search             = ""
+    @State private var segment            = 0       // 0 = Meine, 1 = KI-Vorschläge
+    @State private var mealTypeFilter     = "Alle"  // "Alle" or a MealType.name
+    @State private var draggingMealType: String? = nil
 
     var filteredUser: [Recipe] {
-        guard !search.isEmpty else { return state.userRecipes }
-        return state.userRecipes.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        var result = state.userRecipes
+        if mealTypeFilter != "Alle" {
+            result = result.filter { $0.mealTypes.isEmpty || $0.mealTypes.contains(mealTypeFilter) }
+        }
+        if !search.isEmpty {
+            result = result.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        }
+        return result
     }
 
     var filteredAI: [Recipe] {
-        guard !search.isEmpty else { return state.recipes }
-        return state.recipes.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        var result = state.recipes
+        if !search.isEmpty {
+            result = result.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        }
+        return result
     }
 
     var body: some View {
@@ -39,7 +50,7 @@ struct RecipesContent: View {
 
             Divider()
 
-            // Segment
+            // Segment: Meine / KI
             Picker("", selection: $segment) {
                 Text("Meine Rezepte").tag(0)
                 Text("KI-Vorschläge").tag(1)
@@ -48,6 +59,20 @@ struct RecipesContent: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(Theme.white)
+
+            // Meal type filter chips (same as Planer)
+            if segment == 0 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        mealChip("Alle", emoji: nil)
+                        ForEach(state.mealTypes) { mt in
+                            mealChip(mt.name, emoji: mt.emoji)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                }
+                .background(Theme.white)
+            }
 
             Divider()
 
@@ -65,6 +90,21 @@ struct RecipesContent: View {
             RecipeEditSheet(existingRecipe: recipe)
                 .environmentObject(state)
         }
+    }
+
+    @ViewBuilder
+    private func mealChip(_ name: String, emoji: String?) -> some View {
+        let isSelected = mealTypeFilter == name
+        HStack(spacing: 4) {
+            if let e = emoji { Text(e).font(.system(size: 12)) }
+            Text(name).font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(isSelected ? Theme.amber : Theme.white)
+        .foregroundColor(isSelected ? .white : Theme.dark)
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1))
+        .onTapGesture { mealTypeFilter = name }
     }
 
     // MARK: - My Recipes List

@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
+#if canImport(HealthKit)
 import HealthKit
+#endif
 
 @MainActor
 class AppState: ObservableObject {
@@ -21,7 +23,9 @@ class AppState: ObservableObject {
     @Published var todayCarbs: Double            = 0
     @Published var healthKitAuthorized           = false
 
+    #if canImport(HealthKit)
     private let healthStore = HKHealthStore()
+    #endif
 
     var selectedSupermarket: Supermarket? {
         supermarkets.first { $0.id == selectedSupermarketId }
@@ -181,8 +185,9 @@ class AppState: ObservableObject {
         } catch { print("API Error: \(error)") }
     }
 
-    // MARK: - HealthKit
+    // MARK: - HealthKit (nur iOS / Apple Silicon Mac)
     func requestHealthKitAccess() async {
+        #if canImport(HealthKit)
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let types: Set<HKObjectType> = [
             HKQuantityType(.dietaryEnergyConsumed), HKQuantityType(.dietaryProtein),
@@ -193,9 +198,11 @@ class AppState: ObservableObject {
             healthKitAuthorized = true
             await loadTodayMacrosFromHealth()
         } catch { print("HealthKit: \(error)") }
+        #endif
     }
 
     func loadTodayMacrosFromHealth() async {
+        #if canImport(HealthKit)
         let start = Calendar.current.startOfDay(for: Date())
         let pred  = HKQuery.predicateForSamples(withStart: start, end: Date())
         async let a = sumHealth(.dietaryEnergyConsumed, .kilocalorie(), pred)
@@ -203,8 +210,10 @@ class AppState: ObservableObject {
         async let c = sumHealth(.dietaryFatTotal, .gram(), pred)
         async let d = sumHealth(.dietaryCarbohydrates, .gram(), pred)
         todayKcal = await a; todayProtein = await b; todayFat = await c; todayCarbs = await d
+        #endif
     }
 
+    #if canImport(HealthKit)
     private func sumHealth(_ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ pred: NSPredicate) async -> Double {
         await withCheckedContinuation { cont in
             let q = HKStatisticsQuery(quantityType: HKQuantityType(id), quantitySamplePredicate: pred) { _, s, _ in
@@ -213,6 +222,7 @@ class AppState: ObservableObject {
             healthStore.execute(q)
         }
     }
+    #endif
 }
 
 // MARK: - Array helper

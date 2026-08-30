@@ -181,6 +181,20 @@ struct RecipePickerSheet: View {
         return state.recipes.filter { $0.name.localizedCaseInsensitiveContains(search) }
     }
 
+    @ViewBuilder
+    private var favoritesSection: some View {
+        Section {
+            ForEach(favorites) { recipe in
+                recipeRow(recipe)
+            }
+        } header: {
+            HStack(spacing: 4) {
+                Image(systemName: "heart.fill").foregroundColor(.red).font(.system(size: 11))
+                Text("Favoriten").font(.system(size: 12, weight: .bold)).foregroundColor(.red)
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -191,26 +205,19 @@ struct RecipePickerSheet: View {
                         TextField("Rezept suchen…", text: $search)
                     }
                 }
-                .listRowBackground(Color.clear)
 
                 // Favoriten
                 if !favorites.isEmpty && search.isEmpty {
-                    Section {
-                        ForEach(favorites) { recipe in
-                            recipeRow(recipe)
-                        }
-                    } header: {
-                        Label("Favoriten", systemImage: "heart.fill")
-                            .foregroundColor(.red)
-                            .font(.system(size: 12, weight: .bold))
-                    }
+                    favoritesSection
                 }
 
                 // Alle / Suchergebnis
-                Section(search.isEmpty ? "Alle Rezepte" : "Suchergebnis") {
+                Section {
                     ForEach(filtered) { recipe in
                         recipeRow(recipe)
                     }
+                } header: {
+                    Text(search.isEmpty ? "Alle Rezepte" : "Suchergebnis")
                 }
 
                 // Eigenes Rezept

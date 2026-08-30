@@ -169,10 +169,9 @@ struct RecipePickerSheet: View {
     let title: String
     let onSelect: (String, String) -> Void   // name, emoji
 
-    @State private var search      = ""
-    @State private var customName  = ""
-    @State private var customEmoji = ""
-    @State private var showCustom  = false
+    @State private var search            = ""
+    @State private var showNewRecipe     = false
+    @State private var editingUserRecipe: Recipe? = nil
 
     var favorites: [Recipe] { state.allRecipes.filter(\.isFavorite) }
 
@@ -183,48 +182,13 @@ struct RecipePickerSheet: View {
 
     @ViewBuilder
     private var customRecipeContent: some View {
-        if showCustom {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    TextField("🍽", text: $customEmoji)
-                        .frame(width: 44).font(.system(size: 24))
-                        .multilineTextAlignment(.center)
-                        .padding(8)
-                        .background(Theme.cream)
-                        .cornerRadius(8)
-                    TextField("Rezeptname", text: $customName)
-                        .font(.system(size: 14)).foregroundColor(Theme.dark)
-                }
-                Button {
-                    guard !customName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                    let emoji = customEmoji.isEmpty ? "🍽" : customEmoji
-                    let name  = customName.trimmingCharacters(in: .whitespaces)
-                    let newRecipe = Recipe(
-                        id: Int(Date().timeIntervalSince1970),
-                        name: name, time: 30, match: 100,
-                        uses: [], category: "Eigenes",
-                        emoji: emoji, isBatch: false, desc: ""
-                    )
-                    state.userRecipes.insert(newRecipe, at: 0)
-                    onSelect(name, emoji)
-                    dismiss()
-                } label: {
-                    Text("Hinzufügen & auswählen")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(customName.isEmpty ? Theme.muted : Theme.amber)
-                }
-                .disabled(customName.isEmpty)
-            }
-            .padding(.vertical, 4)
-        } else {
-            Button {
-                withAnimation { showCustom = true }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill").foregroundColor(Theme.amber)
-                    Text("Neues Rezept anlegen").foregroundColor(Theme.amber)
-                        .font(.system(size: 14))
-                }
+        Button {
+            showNewRecipe = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill").foregroundColor(Theme.amber)
+                Text("Neues Rezept anlegen").foregroundColor(Theme.amber)
+                    .font(.system(size: 14))
             }
         }
     }
@@ -259,6 +223,14 @@ struct RecipePickerSheet: View {
                     Section {
                         ForEach(state.userRecipes) { recipe in
                             recipeRow(recipe)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button {
+                                        editingUserRecipe = recipe
+                                    } label: {
+                                        Label("Bearbeiten", systemImage: "pencil")
+                                    }
+                                    .tint(.blue)
+                                }
                         }
                     } header: {
                         HStack(spacing: 4) {
@@ -301,6 +273,18 @@ struct RecipePickerSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Abbrechen") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showNewRecipe) {
+                RecipeEditSheet { saved in
+                    state.userRecipes.insert(saved, at: 0)
+                    onSelect(saved.name, saved.emoji)
+                    dismiss()
+                }
+                .environmentObject(state)
+            }
+            .sheet(item: $editingUserRecipe) { recipe in
+                RecipeEditSheet(existingRecipe: recipe)
+                    .environmentObject(state)
             }
         }
     }

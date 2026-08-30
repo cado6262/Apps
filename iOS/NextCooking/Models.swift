@@ -15,7 +15,10 @@ struct Recipe: Identifiable, Codable {
     var protein: Int?
     var fat: Int?
     var carbs: Int?
-    var isFavorite: Bool = false  // nicht in CodingKeys → überlebt JSON-Parsing
+    var isFavorite: Bool     = false  // nicht in CodingKeys → überlebt JSON-Parsing
+    var steps: [String]      = []     // Kochschritte
+    var detailIngredients: [String] = []  // Zutaten mit Mengenangaben
+    var photoData: Data?     = nil    // eigenes Foto
 
     enum CodingKeys: String, CodingKey {
         case id, name, time, match, uses, emoji, desc, kcal, protein, fat, carbs

@@ -22,7 +22,8 @@ targets:
       path: iOS/NextCooking/Info.plist
       properties:
         NSHealthShareUsageDescription: "Next Cooking importiert deine Tagesmakros aus Apple Health, um passende Rezepte vorzuschlagen."
-        NSCameraUsageDescription: "Next Cooking kann die Kamera nutzen, um Barcodes von Lebensmitteln zu scannen."
+        NSCameraUsageDescription: "Next Cooking kann die Kamera nutzen, um Barcodes von Lebensmitteln zu scannen oder Rezeptfotos aufzunehmen."
+        NSPhotoLibraryUsageDescription: "Next Cooking nutzt deine Fotomediathek um Rezeptfotos hinzuzufügen."
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:

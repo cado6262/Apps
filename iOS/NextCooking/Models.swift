@@ -208,6 +208,24 @@ struct Supermarket: Identifiable, Codable {
     ]
 }
 
+// MARK: - MealType (dynamisch, erweiterbar)
+struct MealType: Identifiable {
+    var id: UUID = UUID()
+    var name: String
+    var emoji: String
+
+    static let defaults: [MealType] = [
+        MealType(name: "Frühstück",    emoji: "🌅"),
+        MealType(name: "Hauptgericht", emoji: "🍽"),
+    ]
+}
+
+// MARK: - WeekMealEntry
+struct WeekMealEntry {
+    var recipe: String
+    var emoji: String
+}
+
 // MARK: - WeekDay
 struct WeekDay: Identifiable {
     var id: Int
@@ -216,6 +234,7 @@ struct WeekDay: Identifiable {
     var emoji: String?
     var breakfast: String?       // Frühstück
     var breakfastEmoji: String?
+    var customMeals: [String: WeekMealEntry] = [:]   // key = MealType.name
 
     static let defaults: [WeekDay] = [
         WeekDay(id: 0, shortName: "Mo", recipe: "Linsen-Dhal",    emoji: "🍛", breakfast: "Haferflocken mit Beeren", breakfastEmoji: "🫐"),

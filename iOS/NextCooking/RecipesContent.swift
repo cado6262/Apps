@@ -100,8 +100,16 @@ struct RecipesContent: View {
                             .tint(.red)
                         }
                 }
+                .onMove { from, to in
+                    state.userRecipes.move(fromOffsets: from, toOffset: to)
+                }
             }
             .listStyle(.plain)
+            .toolbar {
+                if segment == 0 && search.isEmpty {
+                    EditButton()
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 addButton
             }

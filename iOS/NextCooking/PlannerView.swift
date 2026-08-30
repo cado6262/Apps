@@ -2,112 +2,220 @@ import SwiftUI
 
 struct PlannerView: View {
     @EnvironmentObject var state: AppState
-    @State private var mealSegment = 1      // 0 = Frühstück, 1 = Hauptgericht
+    @State private var selectedMealTypeName: String = "Hauptgericht"
     @State private var pickingFor: DayPick? = nil
+    @State private var showAddMealType   = false
+    @State private var newMealTypeName   = ""
+    @State private var newMealTypeEmoji  = ""
+    @State private var draggingMealType: String? = nil
+
+    var selectedMealType: MealType {
+        state.mealTypes.first { $0.name == selectedMealTypeName } ?? MealType.defaults[1]
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                mealTypeTabs
 
-                    // ── Mahlzeit-Tab ──
-                    Picker("Mahlzeit", selection: $mealSegment) {
-                        Text("🌅 Frühstück").tag(0)
-                        Text("🍽 Hauptgericht").tag(1)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        aiPlanButton
+                        weekRows
+                        batchTip
+                        hintRow
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
-
-                    // ── KI planen ──
-                    HStack {
-                        Spacer()
-                        Button { state.fillWeekWithAI(meal: mealSegment) } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
-                                Text("KI planen").font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .background(Theme.amber).cornerRadius(10)
-                        }
-                    }
-                    .padding(.horizontal, 16).padding(.bottom, 14)
-
-                    // ── Wochentage ──
-                    ForEach(Array(state.week.enumerated()), id: \.element.id) { index, day in
-                        let isBreakfast = mealSegment == 0
-                        WeekDayRow(
-                            day: day,
-                            dayNumber: index + 1,
-                            recipeName:  isBreakfast ? day.breakfast      : day.recipe,
-                            recipeEmoji: isBreakfast ? day.breakfastEmoji : day.emoji,
-                            onTap: { pickingFor = DayPick(id: index) },
-                            onClear: {
-                                if isBreakfast {
-                                    state.week[index].breakfast      = nil
-                                    state.week[index].breakfastEmoji = nil
-                                } else {
-                                    state.week[index].recipe = nil
-                                    state.week[index].emoji  = nil
-                                }
-                            },
-                            onLongPress: {
-                                let r = state.recipes.randomElement()
-                                if isBreakfast {
-                                    state.week[index].breakfast      = r?.name
-                                    state.week[index].breakfastEmoji = r?.emoji
-                                } else {
-                                    state.week[index].recipe = r?.name
-                                    state.week[index].emoji  = r?.emoji
-                                }
-                            }
-                        )
-                        .padding(.horizontal, 16).padding(.bottom, 8)
-                    }
-
-                    // Batch Cook Tipp
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("BATCH COOK TIPP")
-                            .font(.system(size: 11, weight: .bold)).foregroundColor(Theme.green)
-                        Text("Doppelte Menge kochen und einfrieren spart bis zu 3x Zeit pro Woche — ideal für Dhal, Suppen & Saucen.")
-                            .font(.system(size: 12)).foregroundColor(Theme.muted)
-                    }
-                    .padding(14)
-                    .background(Theme.greenBg)
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.green.opacity(0.2), lineWidth: 1))
-                    .cornerRadius(14)
-                    .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 20)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "hand.tap.fill").font(.system(size: 11)).foregroundColor(Theme.muted)
-                        Text("Tippen = wählen  ·  Langer Druck = Zufallsrezept")
-                            .font(.system(size: 11)).foregroundColor(Theme.muted)
-                    }
-                    .padding(.bottom, 16)
                 }
+                .background(Theme.cream)
             }
             .background(Theme.cream.ignoresSafeArea())
             .navigationTitle("Wochenplan")
-        }
-        .sheet(item: $pickingFor) { pick in
-            let isBreakfast = mealSegment == 0
-            let label = isBreakfast ? "Frühstück" : "Hauptgericht"
-            RecipePickerSheet(
-                title: "\(state.week[pick.id].shortName) – \(label)"
-            ) { name, emoji in
-                if isBreakfast {
-                    state.week[pick.id].breakfast      = name
-                    state.week[pick.id].breakfastEmoji = emoji
-                } else {
-                    state.week[pick.id].recipe = name
-                    state.week[pick.id].emoji  = emoji
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showAddMealType = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
                 }
             }
         }
+        .sheet(item: $pickingFor) { pick in
+            RecipePickerSheet(
+                title: "\(state.week[pick.id].shortName) – \(selectedMealType.emoji) \(selectedMealType.name)"
+            ) { name, emoji in
+                state.setMeal(dayIndex: pick.id, typeName: selectedMealType.name, recipe: name, emoji: emoji)
+            }
+        }
+        .alert("Neue Mahlzeit", isPresented: $showAddMealType) {
+            TextField("Emoji (z.B. 🥗)", text: $newMealTypeEmoji)
+            TextField("Name (z.B. Mittagessen)", text: $newMealTypeName)
+            Button("Hinzufügen") {
+                let name = newMealTypeName.trimmingCharacters(in: .whitespaces)
+                guard !name.isEmpty else { return }
+                let emoji = newMealTypeEmoji.isEmpty ? "🍴" : newMealTypeEmoji
+                state.mealTypes.append(MealType(name: name, emoji: emoji))
+                selectedMealTypeName = name
+                newMealTypeName  = ""
+                newMealTypeEmoji = ""
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Lege eine eigene Mahlzeit an — z.B. Snack, Mittagessen oder Pre-Workout.")
+        }
+    }
+
+    // MARK: - Meal type chip row (drag-to-reorder)
+
+    @ViewBuilder
+    private var mealTypeTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(state.mealTypes) { mt in
+                    let isSelected = selectedMealTypeName == mt.name
+                    HStack(spacing: 5) {
+                        Text(mt.emoji).font(.system(size: 13))
+                        Text(mt.name).font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(isSelected ? Theme.amber : Theme.white)
+                    .foregroundColor(isSelected ? .white : Theme.dark)
+                    .cornerRadius(20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1)
+                    )
+                    .opacity(draggingMealType == mt.name ? 0.4 : 1.0)
+                    .onTapGesture { selectedMealTypeName = mt.name }
+                    .onLongPressGesture(minimumDuration: 0.01, perform: {})
+                    .onDrag {
+                        draggingMealType = mt.name
+                        return NSItemProvider(object: mt.name as NSString)
+                    }
+                    .onDrop(of: ["public.text"], delegate: MealTypeDropDelegate(
+                        name: mt.name,
+                        mealTypes: $state.mealTypes,
+                        dragging: $draggingMealType
+                    ))
+                    .contextMenu {
+                        if state.mealTypes.count > 1 {
+                            Button(role: .destructive) {
+                                state.mealTypes.removeAll { $0.name == mt.name }
+                                if selectedMealTypeName == mt.name {
+                                    selectedMealTypeName = state.mealTypes.first?.name ?? "Hauptgericht"
+                                }
+                            } label: {
+                                Label("Löschen", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+        }
+        .background(Theme.white)
+        Divider()
+    }
+
+    // MARK: - KI planen button
+
+    @ViewBuilder
+    private var aiPlanButton: some View {
+        HStack {
+            Spacer()
+            Button { state.fillWeekWithAI(mealTypeName: selectedMealType.name) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
+                    Text("KI planen").font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Theme.amber).cornerRadius(10)
+            }
+        }
+        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+    }
+
+    // MARK: - Week rows
+
+    @ViewBuilder
+    private var weekRows: some View {
+        ForEach(Array(state.week.enumerated()), id: \.element.id) { index, day in
+            let meal = state.getMeal(dayIndex: index, typeName: selectedMealType.name)
+            WeekDayRow(
+                day: day,
+                dayNumber: index + 1,
+                recipeName:  meal?.recipe,
+                recipeEmoji: meal?.emoji,
+                onTap: { pickingFor = DayPick(id: index) },
+                onClear: {
+                    state.setMeal(dayIndex: index, typeName: selectedMealType.name, recipe: nil, emoji: nil)
+                },
+                onLongPress: {
+                    if let r = state.recipes.randomElement() {
+                        state.setMeal(dayIndex: index, typeName: selectedMealType.name, recipe: r.name, emoji: r.emoji)
+                    }
+                }
+            )
+            .padding(.horizontal, 16).padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Batch tip
+
+    @ViewBuilder
+    private var batchTip: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("BATCH COOK TIPP")
+                .font(.system(size: 11, weight: .bold)).foregroundColor(Theme.green)
+            Text("Doppelte Menge kochen und einfrieren spart bis zu 3x Zeit pro Woche — ideal für Dhal, Suppen & Saucen.")
+                .font(.system(size: 12)).foregroundColor(Theme.muted)
+        }
+        .padding(14)
+        .background(Theme.greenBg)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.green.opacity(0.2), lineWidth: 1))
+        .cornerRadius(14)
+        .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 20)
+    }
+
+    // MARK: - Hint row
+
+    @ViewBuilder
+    private var hintRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "hand.tap.fill").font(.system(size: 11)).foregroundColor(Theme.muted)
+            Text("Tippen = wählen  ·  Langer Druck = Zufallsrezept  ·  Tab halten = verschieben")
+                .font(.system(size: 11)).foregroundColor(Theme.muted)
+        }
+        .padding(.bottom, 16)
     }
 }
 
-// Identifier für den Rezept-Picker (Tag-Index)
+// MARK: - Drag drop delegate for meal types
+private struct MealTypeDropDelegate: DropDelegate {
+    let name: String
+    @Binding var mealTypes: [MealType]
+    @Binding var dragging: String?
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != name,
+              let from = mealTypes.firstIndex(where: { $0.name == dragging }),
+              let to   = mealTypes.firstIndex(where: { $0.name == name }) else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            mealTypes.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+}
+
+// MARK: - DayPick
 struct DayPick: Identifiable { var id: Int }
 
 // MARK: - Wochentag-Zeile
@@ -167,7 +275,7 @@ struct RecipePickerSheet: View {
     @EnvironmentObject var state: AppState
     @Environment(\.dismiss) var dismiss
     let title: String
-    let onSelect: (String, String) -> Void   // name, emoji
+    let onSelect: (String, String) -> Void
 
     @State private var search            = ""
     @State private var showNewRecipe     = false
@@ -210,7 +318,6 @@ struct RecipePickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // Suche
                 Section {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
@@ -218,7 +325,6 @@ struct RecipePickerSheet: View {
                     }
                 }
 
-                // Eigene Rezepte — immer oben
                 if !state.userRecipes.isEmpty && search.isEmpty {
                     Section {
                         ForEach(state.userRecipes) { recipe in
@@ -242,12 +348,10 @@ struct RecipePickerSheet: View {
                     }
                 }
 
-                // Favoriten
                 if !favorites.isEmpty && search.isEmpty {
                     favoritesSection
                 }
 
-                // KI-Vorschläge / Suchergebnis
                 Section {
                     ForEach(filtered) { recipe in
                         recipeRow(recipe)
@@ -256,7 +360,6 @@ struct RecipePickerSheet: View {
                     Text(search.isEmpty ? "KI-Vorschläge" : "Suchergebnis")
                 }
 
-                // Eigenes Rezept
                 Section {
                     customRecipeContent
                 } header: {

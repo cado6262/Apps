@@ -14,6 +14,7 @@ class AppState: ObservableObject {
     @Published var week: [WeekDay]               = WeekDay.defaults
     @Published var supermarkets: [Supermarket]   = Supermarket.defaults
     @Published var selectedSupermarketId: UUID?  = Supermarket.defaults.first?.id
+    @Published var mealTypes: [MealType]          = MealType.defaults
     @Published var likedPosts: Set<Int>          = []
     @Published var isLoadingAI                   = false
     @Published var isLoadingNutritionAI          = false
@@ -98,19 +99,46 @@ class AppState: ObservableObject {
         shopping.removeAll { $0.recipeId == recipeId }
     }
 
-    // MARK: - Planner
-    func fillWeekWithAI(meal: Int = 1) {
-        week = week.enumerated().map { (i, day) in
-            var d = day
-            let r = recipes[i % recipes.count]
-            if meal == 0 {
-                d.breakfast      = r.name
-                d.breakfastEmoji = r.emoji
+    // MARK: - Planner helpers
+    func getMeal(dayIndex: Int, typeName: String) -> (recipe: String, emoji: String)? {
+        guard week.indices.contains(dayIndex) else { return nil }
+        let day = week[dayIndex]
+        switch typeName {
+        case "Hauptgericht":
+            guard let r = day.recipe, let e = day.emoji else { return nil }
+            return (r, e)
+        case "Frühstück":
+            guard let r = day.breakfast, let e = day.breakfastEmoji else { return nil }
+            return (r, e)
+        default:
+            guard let m = day.customMeals[typeName] else { return nil }
+            return (m.recipe, m.emoji)
+        }
+    }
+
+    func setMeal(dayIndex: Int, typeName: String, recipe: String?, emoji: String?) {
+        guard week.indices.contains(dayIndex) else { return }
+        switch typeName {
+        case "Hauptgericht":
+            week[dayIndex].recipe = recipe
+            week[dayIndex].emoji  = emoji
+        case "Frühstück":
+            week[dayIndex].breakfast      = recipe
+            week[dayIndex].breakfastEmoji = emoji
+        default:
+            if let r = recipe, let e = emoji {
+                week[dayIndex].customMeals[typeName] = WeekMealEntry(recipe: r, emoji: e)
             } else {
-                d.recipe = r.name
-                d.emoji  = r.emoji
+                week[dayIndex].customMeals.removeValue(forKey: typeName)
             }
-            return d
+        }
+    }
+
+    func fillWeekWithAI(mealTypeName: String) {
+        guard !recipes.isEmpty else { return }
+        for i in week.indices {
+            let r = recipes[i % recipes.count]
+            setMeal(dayIndex: i, typeName: mealTypeName, recipe: r.name, emoji: r.emoji)
         }
     }
 

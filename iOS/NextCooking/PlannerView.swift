@@ -182,6 +182,54 @@ struct RecipePickerSheet: View {
     }
 
     @ViewBuilder
+    private var customRecipeContent: some View {
+        if showCustom {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    TextField("🍽", text: $customEmoji)
+                        .frame(width: 44).font(.system(size: 24))
+                        .multilineTextAlignment(.center)
+                        .padding(8)
+                        .background(Theme.cream)
+                        .cornerRadius(8)
+                    TextField("Rezeptname", text: $customName)
+                        .font(.system(size: 14)).foregroundColor(Theme.dark)
+                }
+                Button {
+                    guard !customName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                    let emoji = customEmoji.isEmpty ? "🍽" : customEmoji
+                    let name  = customName.trimmingCharacters(in: .whitespaces)
+                    let newRecipe = Recipe(
+                        id: Int(Date().timeIntervalSince1970),
+                        name: name, time: 30, match: 100,
+                        uses: [], category: "Eigenes",
+                        emoji: emoji, isBatch: false, desc: ""
+                    )
+                    state.recipes.insert(newRecipe, at: 0)
+                    onSelect(name, emoji)
+                    dismiss()
+                } label: {
+                    Text("Hinzufügen & auswählen")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(customName.isEmpty ? Theme.muted : Theme.amber)
+                }
+                .disabled(customName.isEmpty)
+            }
+            .padding(.vertical, 4)
+        } else {
+            Button {
+                withAnimation { showCustom = true }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill").foregroundColor(Theme.amber)
+                    Text("Neues Rezept anlegen").foregroundColor(Theme.amber)
+                        .font(.system(size: 14))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var favoritesSection: some View {
         Section {
             ForEach(favorites) { recipe in
@@ -221,51 +269,10 @@ struct RecipePickerSheet: View {
                 }
 
                 // Eigenes Rezept
-                Section("Eigenes Rezept") {
-                    if showCustom {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 10) {
-                                TextField("🍽", text: $customEmoji)
-                                    .frame(width: 44).font(.system(size: 24))
-                                    .multilineTextAlignment(.center)
-                                    .padding(8)
-                                    .background(Theme.cream)
-                                    .cornerRadius(8)
-                                TextField("Rezeptname", text: $customName)
-                                    .font(.system(size: 14)).foregroundColor(Theme.dark)
-                            }
-                            Button {
-                                guard !customName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                                let emoji = customEmoji.isEmpty ? "🍽" : customEmoji
-                                let name  = customName.trimmingCharacters(in: .whitespaces)
-                                let newRecipe = Recipe(
-                                    id: Int(Date().timeIntervalSince1970),
-                                    name: name, time: 30, match: 100,
-                                    uses: [], category: "Eigenes",
-                                    emoji: emoji, isBatch: false, desc: ""
-                                )
-                                state.recipes.insert(newRecipe, at: 0)
-                                onSelect(name, emoji)
-                                dismiss()
-                            } label: {
-                                Text("Hinzufügen & auswählen")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(customName.isEmpty ? Theme.muted : Theme.amber)
-                            }
-                            .disabled(customName.isEmpty)
-                        }
-                        .padding(.vertical, 4)
-                    } else {
-                        Button {
-                            withAnimation { showCustom = true }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill").foregroundColor(Theme.amber)
-                                Text("Neues Rezept anlegen").foregroundColor(Theme.amber)
-                                    .font(.system(size: 14))
-                            }
-                        }
-                    }
+                Section {
+                    customRecipeContent
+                } header: {
+                    Text("Eigenes Rezept")
                 } footer: {
                     Text("Eigene Rezepte werden zur Datenbank hinzugefügt und stehen überall zur Verfügung.")
                         .font(.caption)

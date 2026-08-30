@@ -86,7 +86,6 @@ struct PlannerView: View {
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1)
                     )
-                    .opacity(draggingMealType == mt.name ? 0.4 : 1.0)
                     .onTapGesture { selectedMealTypeName = mt.name }
                     .onLongPressGesture(minimumDuration: 0.01, perform: {})
                     .onDrag {

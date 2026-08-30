@@ -22,8 +22,6 @@ struct KucheView: View {
                                     RoundedRectangle(cornerRadius: 20)
                                         .stroke(selectedTab == tab ? Color.clear : Theme.border, lineWidth: 1)
                                 )
-                                .opacity(draggingTab == tab ? 0.45 : 1.0)
-                                .animation(.easeInOut(duration: 0.15), value: draggingTab)
                                 .onTapGesture { selectedTab = tab }
                                 .onDrag {
                                     draggingTab = tab

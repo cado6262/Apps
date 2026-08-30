@@ -174,11 +174,11 @@ struct RecipePickerSheet: View {
     @State private var customEmoji = ""
     @State private var showCustom  = false
 
-    var favorites: [Recipe] { state.recipes.filter(\.isFavorite) }
+    var favorites: [Recipe] { state.allRecipes.filter(\.isFavorite) }
 
     var filtered: [Recipe] {
-        guard !search.isEmpty else { return state.recipes }
-        return state.recipes.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        guard !search.isEmpty else { return state.allRecipes }
+        return state.allRecipes.filter { $0.name.localizedCaseInsensitiveContains(search) }
     }
 
     @ViewBuilder
@@ -205,7 +205,7 @@ struct RecipePickerSheet: View {
                         uses: [], category: "Eigenes",
                         emoji: emoji, isBatch: false, desc: ""
                     )
-                    state.recipes.insert(newRecipe, at: 0)
+                    state.userRecipes.insert(newRecipe, at: 0)
                     onSelect(name, emoji)
                     dismiss()
                 } label: {
@@ -254,18 +254,34 @@ struct RecipePickerSheet: View {
                     }
                 }
 
+                // Eigene Rezepte — immer oben
+                if !state.userRecipes.isEmpty && search.isEmpty {
+                    Section {
+                        ForEach(state.userRecipes) { recipe in
+                            recipeRow(recipe)
+                        }
+                    } header: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.fill").font(.system(size: 11))
+                            Text("Meine Rezepte")
+                        }
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Theme.amber)
+                    }
+                }
+
                 // Favoriten
                 if !favorites.isEmpty && search.isEmpty {
                     favoritesSection
                 }
 
-                // Alle / Suchergebnis
+                // KI-Vorschläge / Suchergebnis
                 Section {
                     ForEach(filtered) { recipe in
                         recipeRow(recipe)
                     }
                 } header: {
-                    Text(search.isEmpty ? "Alle Rezepte" : "Suchergebnis")
+                    Text(search.isEmpty ? "KI-Vorschläge" : "Suchergebnis")
                 }
 
                 // Eigenes Rezept

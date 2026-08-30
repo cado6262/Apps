@@ -6,7 +6,8 @@ import HealthKit
 
 @MainActor
 class AppState: ObservableObject {
-    @Published var recipes: [Recipe]             = Recipe.defaults
+    @Published var recipes: [Recipe]             = Recipe.defaults  // KI-Vorschläge
+    @Published var userRecipes: [Recipe]         = []               // eigene Rezepte, nie überschrieben
     @Published var pantry: [PantryItem]          = PantryItem.defaults
     @Published var shopping: [ShoppingItem]      = ShoppingItem.defaults
     @Published var basics: [BasicItem]           = BasicItem.defaults
@@ -32,9 +33,12 @@ class AppState: ObservableObject {
     }
 
     // MARK: - Computed
+    var allRecipes: [Recipe] { userRecipes + recipes }  // eigene zuerst
+
     var dailyRecipe: Recipe {
+        let pool = allRecipes.isEmpty ? Recipe.defaults : allRecipes
         let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
-        return recipes[(dayOfYear - 1) % recipes.count]
+        return pool[(dayOfYear - 1) % pool.count]
     }
 
     var specialItems: [PantryItem]  { pantry.filter(\.isSpecial) }
@@ -111,7 +115,9 @@ class AppState: ObservableObject {
     }
 
     func toggleFavorite(recipeId: Int) {
-        if let i = recipes.firstIndex(where: { $0.id == recipeId }) {
+        if let i = userRecipes.firstIndex(where: { $0.id == recipeId }) {
+            userRecipes[i].isFavorite.toggle()
+        } else if let i = recipes.firstIndex(where: { $0.id == recipeId }) {
             recipes[i].isFavorite.toggle()
         }
     }

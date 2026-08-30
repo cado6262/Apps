@@ -30,6 +30,11 @@ struct ShoppingContent: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            // ── Basics — fixiert oben, scrollt nicht weg ──
+            BasicsPruefenSection(isExpanded: $showBasics)
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
+
         ScrollView {
             VStack(spacing: 0) {
 
@@ -164,11 +169,10 @@ struct ShoppingContent: View {
                     .padding(.vertical, 32).padding(.horizontal, 32)
                 }
 
-                // ── Basics prüfen ──
-                BasicsPruefenSection(isExpanded: $showBasics)
-                    .padding(.horizontal, 16).padding(.bottom, 20)
+                Spacer().frame(height: 20)
             }
         }
+        } // Ende äußere VStack
         // Dialog: Für welchen Supermarkt?
         .confirmationDialog("Für welchen Supermarkt?", isPresented: $showStorePicker, titleVisibility: .visible) {
             ForEach(state.supermarkets) { store in

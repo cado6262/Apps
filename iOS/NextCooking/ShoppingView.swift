@@ -3,26 +3,29 @@ import SwiftUI
 // Eingebettet in KucheView
 struct ShoppingContent: View {
     @EnvironmentObject var state: AppState
-    @State private var newItem          = ""
+    @State private var newItem            = ""
+    @State private var shoppingSearch    = ""
+    @State private var selectedCategory  = "Sonstiges"
     @State private var filterStoreId: UUID? = nil
     @State private var expandedRecipes: Set<Int> = []
-    @State private var showBasics       = false
-    @State private var editingBasics    = false
-    @State private var newBasicName     = ""
-    @State private var showStorePicker  = false   // Dialog: Markt für neuen Artikel
-    @State private var showAddStore     = false   // Alert: neuen Supermarkt anlegen
-    @State private var newStoreName     = ""
+    @State private var showBasics        = false
+    @State private var editingBasics     = false
+    @State private var newBasicName      = ""
+    @State private var showStorePicker   = false
+    @State private var showAddStore      = false
+    @State private var newStoreName      = ""
 
     var doneCount: Int { state.shopping.filter(\.isDone).count }
     var progress: Double {
         state.shopping.isEmpty ? 0 : Double(doneCount) / Double(state.shopping.count)
     }
 
-    // Nur Artikel für den aktiven Markt — bei "Alle" (nil) alle anzeigen
     var filteredStandalone: [ShoppingItem] {
-        let base = state.standaloneItems
+        var base = state.standaloneItems
+        if !shoppingSearch.isEmpty {
+            base = base.filter { $0.name.localizedCaseInsensitiveContains(shoppingSearch) }
+        }
         let filtered = filterStoreId == nil ? base : base.filter { $0.storeId == filterStoreId }
-        // nach Gängen des aktiven Markts sortieren
         guard let store = state.selectedSupermarket else { return filtered }
         return filtered.sorted {
             let ai = store.aisles.firstIndex(of: $0.aisle) ?? 999
@@ -33,11 +36,51 @@ struct ShoppingContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Feste Kopfzeile (wie Vorrat) ──
+            // ── Feste Kopfzeile ──
             VStack(spacing: 0) {
+                // Suche
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundColor(Theme.muted).font(.system(size: 14))
+                    TextField("Einkaufsliste suchen…", text: $shoppingSearch)
+                        .font(.system(size: 14)).foregroundColor(Theme.dark)
+                    if !shoppingSearch.isEmpty {
+                        Button { shoppingSearch = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(Theme.muted)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(Theme.white)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+                .cornerRadius(12)
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+
+                // Kategorie-Chips
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(shoppingCategories, id: \.name) { cat in
+                            let isSel = selectedCategory == cat.name
+                            HStack(spacing: 4) {
+                                Text(cat.emoji).font(.system(size: 11))
+                                Text(cat.name)
+                                    .font(.system(size: 11, weight: isSel ? .semibold : .regular))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(isSel ? Theme.amber : Theme.white)
+                            .foregroundColor(isSel ? .white : Theme.dark)
+                            .cornerRadius(14)
+                            .overlay(RoundedRectangle(cornerRadius: 14)
+                                .stroke(isSel ? Color.clear : Theme.border, lineWidth: 1))
+                            .onTapGesture { selectedCategory = cat.name }
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.bottom, 8)
+                }
+
                 // Artikel hinzufügen
                 HStack(spacing: 8) {
-                    TextField("Artikel hinzufügen...", text: $newItem)
+                    TextField("Artikel hinzufügen…", text: $newItem)
                         .font(.system(size: 14)).foregroundColor(Theme.dark)
                         .onSubmit { triggerAdd() }
                         .padding(10)
@@ -49,7 +92,7 @@ struct ShoppingContent: View {
                             .frame(width: 44, height: 44).background(Theme.amber).cornerRadius(10)
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
+                .padding(.horizontal, 16).padding(.bottom, 8)
 
                 basicsCard
             }
@@ -355,7 +398,7 @@ struct ShoppingContent: View {
         state.shopping.append(ShoppingItem(
             id: Int(Date().timeIntervalSince1970),
             name: newItem.trimmingCharacters(in: .whitespaces),
-            amount: "", isDone: false, aisle: "Sonstiges",
+            amount: "", isDone: false, aisle: selectedCategory,
             storeId: storeId
         ))
         newItem = ""
@@ -511,6 +554,19 @@ struct ShoppingRow: View {
         .padding(.bottom, 6)
     }
 }
+
+private let shoppingCategories: [(name: String, emoji: String)] = [
+    ("Obst & Gemüse", "🥦"),
+    ("Fleisch & Fisch", "🥩"),
+    ("Kühl & Käse", "🥛"),
+    ("Tiefkühl", "❄️"),
+    ("Konserven", "🥫"),
+    ("Nudeln & Reis", "🍝"),
+    ("Backwaren", "🍞"),
+    ("Snacks & Süßes", "🍫"),
+    ("Getränke", "🥤"),
+    ("Sonstiges", "📦"),
+]
 
 // MARK: - Array helper (lokal)
 private extension Array where Element == ShoppingItem {

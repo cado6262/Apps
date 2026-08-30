@@ -47,14 +47,19 @@ struct PantryContent: View {
                 // Suche
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundColor(Theme.muted).font(.system(size: 14))
-                    TextField("Suchen...", text: $search)
+                    TextField("Vorrat suchen…", text: $search)
                         .font(.system(size: 14)).foregroundColor(Theme.dark)
+                    if !search.isEmpty {
+                        Button { search = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(Theme.muted)
+                        }
+                    }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(Theme.white)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
                 .cornerRadius(12)
-                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
 
                 // Neue Zutat hinzufügen
                 HStack(spacing: 8) {
@@ -78,12 +83,12 @@ struct PantryContent: View {
                             .frame(width: 44, height: 44).background(Theme.amber).cornerRadius(10)
                     }
                 }
-                .padding(.horizontal, 16).padding(.bottom, 6)
+                .padding(.horizontal, 16).padding(.bottom, 8)
 
                 Text("← Links wischen: Bearbeiten & Löschen")
                     .font(.system(size: 10)).foregroundColor(Theme.muted.opacity(0.6))
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.horizontal, 16).padding(.bottom, 4)
+                    .padding(.horizontal, 16).padding(.bottom, 6)
 
                 basicsCard
             }

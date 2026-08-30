@@ -32,21 +32,22 @@ struct RecipesContent: View {
         VStack(spacing: 0) {
             // Search bar
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundColor(Theme.muted)
+                Image(systemName: "magnifyingglass").foregroundColor(Theme.muted).font(.system(size: 14))
                 TextField("Rezept suchen…", text: $search)
+                    .font(.system(size: 14)).foregroundColor(Theme.dark)
                 if !search.isEmpty {
                     Button { search = "" } label: {
                         Image(systemName: "xmark.circle.fill").foregroundColor(Theme.muted)
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(Theme.white)
-            .cornerRadius(10)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(Theme.white)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+            .cornerRadius(12)
+            .padding(.horizontal, 16)
+            .padding(.top, 12).padding(.bottom, 8)
 
             Divider()
 
